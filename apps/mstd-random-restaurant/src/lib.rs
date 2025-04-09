@@ -211,6 +211,8 @@ async fn get_place_details(place: &mut Place) -> anyhow::Result<()> {
     Ok(())
 }
 
+const MAX_HTTP_REDIRECTION: usize = 12;
+
 async fn get_images(place: &mut Place) -> anyhow::Result<()> {
     let api_key = variables::get("google_location_api_key")
         .expect("You must set the SPIN_VARIABLE_MSTD_RANDOM_RESTAURANT_GOOGLE_LOCATION_API_KEY in  environment var!");
@@ -223,10 +225,28 @@ async fn get_images(place: &mut Place) -> anyhow::Result<()> {
                 aa, api_key
             );
 
-            let request = Request::builder().method(Get).uri(image_uri).build();
-            let response: Response = spin_sdk::http::send(request).await?;
-            let image_bytes = response.body().to_vec();
-            place.photo_bytes.push(Some(image_bytes));
+            let mut response: Response;
+
+            async fn sss() -> anyhow::Result<()> {
+                Ok(())
+            }
+            for _ in 0..MAX_HTTP_REDIRECTION {
+                sss().await?;
+                println!("---###########");
+                // let request =
+                //     Request::builder().method(Get).uri(&image_uri).build();
+                // response = spin_sdk::http::send(request).await?;
+
+                // if response.status() != &302u16 {
+                //     break;
+                // }
+                // let new_location =
+                //     response.header("location").unwrap().as_str().unwrap();
+            }
+
+            // let image_bytes = response.body().to_vec();
+            // place.photo_bytes.push(Some(image_bytes));
+            place.photo_bytes.push(None);
         } else {
             place.photo_bytes.push(None);
         }
@@ -239,9 +259,28 @@ async fn get_image_descriptions(place: &mut Place) -> anyhow::Result<()> {
         if photo_bytes.is_none() {
             place.photo_description.push(None);
         } else {
+            // let request = Request::builder()
+            //     .method(Method::Put)
+            //     .uri(target)
+            //     .header("Authorization", authorization)
+            //     .header("Content-Length", content_length)
+            //     //.header("Content-Type", content_type)
+            //     .header("X-Amz-Content-Sha256", x_amz_content_sha256)
+            //     .header("X-Amz-Date", x_amz_date)
+            //     .body(file.to_vec())
+            //     .build();
+
+            for _ in 0..MAX_HTTP_REDIRECTION {
+                //
+            }
+            let content_length: i32 =
+                photo_bytes.as_ref().unwrap().len().try_into().unwrap();
+
             let request = Request::builder()
                 .method(Post)
                 .uri("http://localhost:3000/image/description")
+                .header("Content-Length", content_length.to_string())
+                .body("ras")
                 .build();
             let response: Response = spin_sdk::http::send(request).await?;
             println!("{}", response.status());
