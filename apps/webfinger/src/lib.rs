@@ -12,6 +12,6 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
     Ok(Response::builder()
         .status(200)
         .header("content-type", "text/plain")
-        .body("Hello World!")
+        .body("webfinger")
         .build())
 }
