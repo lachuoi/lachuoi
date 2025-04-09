@@ -7,9 +7,7 @@ use spin_sdk::{
     variables,
 };
 use std::str::{self};
-// use urlencoding;
 
-/// A simple Spin HTTP component.
 #[cron_component]
 async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
     println!("Newspenguin RSS starting");
@@ -29,8 +27,6 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    // println!("{:?} - {:?}", rss_last_build_date, recorded_last_build_date);
-
     if rss_last_build_date > recorded_last_build_date.unwrap() {
         let new_items =
             get_new_items(channel, recorded_last_build_date.unwrap()).await?;
@@ -48,8 +44,6 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
 const DB_KEY_LAST_BUILD: &str = "newspenguin-rss.last_build_date";
 
 async fn get_rss() -> anyhow::Result<Channel> {
-    // https://docs.rs/rss/latest/rss/
-
     let rss_uri = variables::get("rss_uri").unwrap();
     let request = Request::builder().method(Get).uri(rss_uri).build();
     let response: Response = spin_sdk::http::send(request).await?;
@@ -78,7 +72,7 @@ async fn last_build_date() -> anyhow::Result<Option<NaiveDateTime>> {
         return Ok(None);
     }
 
-    let a = rowset.rows.get(0).unwrap();
+    let a = rowset.rows.first().unwrap();
     match a.get::<&str>(0) {
         Some(a) => {
             let naive_dt =
@@ -99,7 +93,6 @@ async fn update_last_build_date(d: NaiveDateTime) -> anyhow::Result<()> {
     ];
     let rowset = connection
         .execute(
-            // "UPDATE last_build_date SET last_build_date = ? WHERE NAME = ?;",
             "INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?);",
             execute_params.as_slice(),
         )

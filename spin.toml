@@ -45,7 +45,7 @@ component = "ip"
 
 [[trigger.cron]]
 component = "newspenguin-rss"
-cron_expression = "*/3 * * * * *"
+cron_expression = "0 10 * * * *"
 
 # [[trigger.http]]
 # route = "/image/upload/..."
