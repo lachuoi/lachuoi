@@ -1,0 +1,160 @@
+spin_manifest_version = 2
+
+[application]
+name = "lachuoi"
+version = "0.2.0"
+authors = ["Seungjin Kim <seungjin@duck.com>"]
+description = "https://github.com/seungjin/lachuoi"
+
+[variables]
+internal_key = { required = true }
+newspenguin_rss_uri = { required = true }
+newspenguin_mstd_api_uri = { required = true }
+newspenguin_mstd_access_token = { required = true }
+mstd_random_restaurant_mstd_access_token = { required = true }
+mstd_random_restaurant_mstd_api_uri = { required = true }
+mstd_random_restaurant_google_location_api_key = { required = true }
+google_ai_api_key = { required = true }
+image_description_google_ai_api_uri = { required = true }
+image_description_google_ai_prompt = { required = true }
+
+################################################################################
+# Trigger
+################################################################################
+
+[[trigger.http]]
+route = "/"
+component = "root"
+
+[[trigger.http]]
+route = "/static/..."
+component = "assets"
+
+[[trigger.cron]]
+component = "mstd-random-restaurant"
+cron_expression = "0 10 * * * *"
+
+[[trigger.http]]
+route = "/random_place/..."
+# route = { private = true }
+component = "random-place"
+
+[[trigger.http]]
+route = "/ip/..."
+component = "ip"
+
+[[trigger.cron]]
+component = "newspenguin-rss"
+cron_expression = "10 10 * * * *"
+
+# [[trigger.http]]
+# route = "/image/upload/..."
+# component = "image-upload"
+
+[[trigger.http]]
+route = "/image/description/..."
+component = "image-description"
+
+# [[trigger.cron]]
+# component = "wss-rss"
+# cron_expression = "15 * * * * *"
+
+# [[trigger.http]]
+# route = "/logger/..."
+# component = "logger"
+
+# [][trigger.http]]
+# route = "/cert_check/..."
+# componenet = "cert-check"
+
+# [[trigger.cron]]
+# component = "cert-checker"
+# cron_experssion = "0 0 * * * *"
+
+
+################################################################################
+# Componenet
+################################################################################
+
+[component.assets]
+source = { url = "https://github.com/fermyon/spin-fileserver/releases/download/v0.3.0/spin_static_fs.wasm", digest = "sha256:ef88708817e107bf49985c7cefe4dd1f199bf26f6727819183d5c996baa3d148" }
+files = [{ source = "assets", destination = "/" }]
+
+[component.root]
+source = "wasm/root.wasm"
+# allowed_outbound_hosts = ["http://random-place.spin.internal"]
+
+[component.mstd-random-restaurant]
+source = "wasm/mstd_random_restaurant.wasm"
+# allowed_outbound_hosts = ["http://random-place.spin.internal"]
+allowed_outbound_hosts = ["http://localhost:3000","https://maps.googleapis.com"]
+
+[component.random-place]
+source = "wasm/random_place.wasm"
+sqlite_databases = ["geoname"]
+allowed_outbound_hosts = ["https://geoname-seungjin.turso.io"]
+
+[component.ip]
+source = "wasm/ip.wasm"
+
+[component.newspenguin-rss]
+source = "wasm/newspenguin_rss.wasm"
+sqlite_databases = ["feedpub"]
+allowed_outbound_hosts = ["https://www.newspenguin.com", "https://feedpub-seungjin.turso.io", "https://mstd.seungjin.net"]
+
+[component.image-description]
+source = "wasm/image_description.wasm"
+allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
+
+# [component.wss-rss]
+# source = "wasm/wss_rss.wasm"
+# allowed_outbound_hosts = ["https://www.wsj.com", "https://feedpub-seungjin.turso.io"]
+
+# [component.logger]
+# source = "wasm/logger.wasm"
+
+
+################################################################################
+# Variables
+################################################################################
+[component.newspenguin-rss.variables]
+rss_uri = "{{ newspenguin_rss_uri }}"
+mstd_api_uri = "{{ newspenguin_mstd_api_uri }}" 
+mstd_access_token = "{{ newspenguin_mstd_access_token }}"
+
+
+[component.mstd-random-restaurant.variables]
+mstd_access_token = "{{ mstd_random_restaurant_mstd_access_token }}"
+mstd_api_uri = "{{ mstd_random_restaurant_mstd_api_uri }}"
+google_location_api_key = "{{ mstd_random_restaurant_google_location_api_key }}"
+
+[component.image-description.variables]
+google_ai_api_key = "{{ google_ai_api_key }}"
+google_ai_api_uri = "{{ image_description_google_ai_api_uri }}"
+google_ai_prompt =  "{{ image_description_google_ai_prompt }}"
+
+################################################################################
+# Build
+################################################################################
+
+[component.root.build]
+command = "just build root"
+
+[component.mstd-random-restaurant.build]
+command = "just build mstd-random-restaurant"
+
+[component.random-place.build]
+command = "just build random-place"
+
+[component.ip.build]
+command = "just build ip"
+
+[component.newspenguin-rss.build]
+command = "just build newspenguin-rss"
+
+[component.image-description.build]
+command = "just build image-description"
+
+# [component.logger.build]
+# command = "just build logger"
+

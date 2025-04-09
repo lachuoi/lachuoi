@@ -1,0 +1,5 @@
+.spin/
+*.wasm
+runtime-config.prod.toml
+runtime-config.dev.toml
+.env

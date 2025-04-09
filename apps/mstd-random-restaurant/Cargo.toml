@@ -1,0 +1,24 @@
+[package]
+name = "mstd-random-restaurant"
+authors = ["Seungjin Kim <seungjin@duck.com>"]
+description = "mstd.seungjin.net/@_random_restarurant"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.71"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1"
+rand = "0.9.0"
+serde = "1.0"
+serde_json = "1.0"
+#spin-sdk = { git = "https://github.com/spinframework/spin-rust-sdk.git", tag = "v3.1.0" }
+spin-cron-sdk = { git = "https://github.com/spinframework/spin-trigger-cron" }
+spin-sdk = "3.1.0"
+thiserror = "2.0.12"
+urlencoding = "2.1.3"
+
+[workspace]
+
