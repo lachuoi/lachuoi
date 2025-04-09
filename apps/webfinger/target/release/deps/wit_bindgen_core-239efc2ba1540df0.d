@@ -1,0 +1,10 @@
+/var/home/seungjin/Works/wasm/sky/apps/root/target/release/deps/libwit_bindgen_core-239efc2ba1540df0.rmeta: /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/lib.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/abi.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/ns.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/source.rs
+
+/var/home/seungjin/Works/wasm/sky/apps/root/target/release/deps/libwit_bindgen_core-239efc2ba1540df0.rlib: /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/lib.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/abi.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/ns.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/source.rs
+
+/var/home/seungjin/Works/wasm/sky/apps/root/target/release/deps/wit_bindgen_core-239efc2ba1540df0.d: /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/lib.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/abi.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/ns.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/source.rs
+
+/var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/lib.rs:
+/var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/abi.rs:
+/var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/ns.rs:
+/var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/wit-bindgen-core-0.16.0/src/source.rs:
