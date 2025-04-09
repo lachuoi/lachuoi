@@ -1,5 +1,5 @@
 [package]
-name = "webfinger"
+name = "request-catcher"
 authors = ["Seungjin Kim <seungjin@duck.com>"]
 description = ""
 version = "0.1.0"
