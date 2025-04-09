@@ -2,21 +2,49 @@ use rand;
 use rand::seq::SliceRandom;
 use serde_json::Value;
 use spin_cron_sdk::{cron_component, Metadata};
-use spin_sdk::http::{Method::Get, Request, Response};
+use spin_sdk::http::{Method::Get, Method::Post, Request, Response};
 use spin_sdk::variables;
 use std::str;
 
+#[derive(Debug, Default)]
+struct Place {
+    name: String,
+    lat: f64,
+    lng: f64,
+    place_id: String,
+    address: String,
+    rating: f64,
+    photo_references: Vec<Option<String>>,
+    photo_bytes: Vec<Option<Vec<u8>>>,
+    photo_description: Vec<Option<String>>,
+    mstd_media_ids: Vec<Option<i64>>,
+}
+
+#[derive(Debug, Clone)]
+struct Geopoint {
+    lat: f64,
+    lng: f64,
+    country: String,
+    population: Option<i64>,
+}
+
 #[cron_component]
 async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
-    let near_place = loop {
+    let mut place: Place = Place::default();
+
+    let _ = loop {
         let locations = random_place().await?;
         let location = locations[0].to_owned();
-        if let Some(place) = near_by_search(location).await? {
-            break place;
+        if let Some(p) = near_by_search(location, &mut place).await? {
+            break p;
         }
-        std::thread::sleep(std::time::Duration::from_millis(1_000));
+        std::thread::sleep(std::time::Duration::from_millis(2_500));
     };
+    get_place_details(&mut place).await?;
+    get_images(&mut place).await?;
+    get_image_descriptions(&mut place).await?;
 
+    println!("------");
     Ok(())
 }
 
@@ -50,28 +78,10 @@ async fn random_place() -> anyhow::Result<Vec<Geopoint>> {
     Ok(locations)
 }
 
-#[derive(Debug, Default)]
-struct Place {
-    name: String,
-    lat: f64,
-    lng: f64,
-    place_id: String,
-    address: String,
-    rating: f64,
-    pics: Vec<String>,
-    pics_tmp_dir: String,
-    mstd_media_ids: Vec<i64>,
-}
-
-#[derive(Debug, Clone)]
-struct Geopoint {
-    lat: f64,
-    lng: f64,
-    country: String,
-    population: Option<i64>,
-}
-
-async fn near_by_search(geopoint: Geopoint) -> anyhow::Result<Option<Place>> {
+async fn near_by_search(
+    geopoint: Geopoint,
+    place: &mut Place,
+) -> anyhow::Result<Option<usize>> {
     let api_key = variables::get("google_location_api_key")
         .expect("You must set the SPIN_VARIABLE_MSTD_RANDOM_RESTAURANT_GOOGLE_LOCATION_API_KEY in  environment var!");
     let api_url: String = format!(
@@ -134,41 +144,108 @@ async fn near_by_search(geopoint: Geopoint) -> anyhow::Result<Option<Place>> {
     let mut rng = rand::rng();
     filtered_places.shuffle(&mut rng);
 
-    println!("{}", filtered_places[0]);
+    let filtered_place = filtered_places[0].to_owned();
 
-    // name: filtered_places[0].get("name").unwrap().to_string(),
-    // lat: filtered_places[0].get("geometry").unwrap().get("location").unwrap().get("lat").unwrap().as_f64().unwrap(),
-    // lng: filtered_places[0].get("geometry").unwrap().get("location").unwrap().get("lng").unwrap().as_f64().unwrap(),
+    place.name = filtered_place
+        .get("name")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
+    place.lat = filtered_place
+        .get("geometry")
+        .unwrap()
+        .get("location")
+        .unwrap()
+        .get("lat")
+        .unwrap()
+        .as_f64()
+        .unwrap();
+    place.lng = filtered_place
+        .get("geometry")
+        .unwrap()
+        .get("location")
+        .unwrap()
+        .get("lng")
+        .unwrap()
+        .as_f64()
+        .unwrap();
+    place.place_id = filtered_place
+        .get("place_id")
+        .unwrap()
+        .as_str()
+        .unwrap()
+        .to_string();
+    place.rating = filtered_place.get("rating").unwrap().as_f64().unwrap();
 
-    // place_id: filtered_places[0].get("place_id").unwrap().to_string(),
-
-    Ok(None)
-
-    // r.place_id = p.clone()["place_id"].as_str().unwrap().to_string();
-    // r.name = p.clone()["name"].as_str().unwrap().to_string();
-    // if p.get("rating").is_some() {
-    //     r.rating = p["rating"].as_f64().unwrap();
-    // } else {
-    //     r.rating = 0.0;
-    // };
+    Ok(Some(filtered_places.len()))
 }
-async fn get_place_details() -> anyhow::Result<()> {
+async fn get_place_details(place: &mut Place) -> anyhow::Result<()> {
     // Get restaurnat's detailed photos and formatted_address
 
-    let place_id = "ChIJyfDnfQlHWBQR2Z74Us5KFxk";
     let api_key = variables::get("google_location_api_key")
         .expect("You must set the SPIN_VARIABLE_MSTD_RANDOM_RESTAURANT_GOOGLE_LOCATION_API_KEY in  environment var!");
-    let api_url: String = format!(
-        "https://maps.googleapis.com/maps/api/place/details/json?place_id={}&fields=photos&formatted_address&key={}",
-        place_id, api_key
+
+    let api_uri: String = format!(
+        "https://maps.googleapis.com/maps/api/place/details/json?place_id={}&fields=photos,formatted_address&key={}",
+        place.place_id, api_key
     );
 
-    let request = Request::builder().method(Get).uri(api_url).build();
+    let request = Request::builder().method(Get).uri(api_uri).build();
     let response: Response = spin_sdk::http::send(request).await?;
 
-    //println!("{:#?}", resp);
+    let a = str::from_utf8(response.body()).unwrap();
+    let b: Value = serde_json::from_str(a).unwrap();
 
-    //println!("{:#?}", resp["result"]["photos"]);
+    place.address = b["result"]["formatted_address"].to_string();
 
+    for i in 0..4 {
+        let aa = b["result"]["photos"][i]["photo_reference"].to_owned();
+        if aa.is_null() {
+            place.photo_references.push(None);
+        } else {
+            let rf = aa.as_str().unwrap().to_owned();
+            place.photo_references.push(Some(rf));
+        }
+    }
+    Ok(())
+}
+
+async fn get_images(place: &mut Place) -> anyhow::Result<()> {
+    let api_key = variables::get("google_location_api_key")
+        .expect("You must set the SPIN_VARIABLE_MSTD_RANDOM_RESTAURANT_GOOGLE_LOCATION_API_KEY in  environment var!");
+    let photo_references = &place.photo_references;
+    for reference in photo_references {
+        if reference.is_some() {
+            let aa = reference.as_ref().unwrap();
+            let image_uri = format!(
+                "https://maps.googleapis.com/maps/api/place/photo?maxwidth=1080&photoreference={}&key={}",
+                aa, api_key
+            );
+
+            let request = Request::builder().method(Get).uri(image_uri).build();
+            let response: Response = spin_sdk::http::send(request).await?;
+            let image_bytes = response.body().to_vec();
+            place.photo_bytes.push(Some(image_bytes));
+        } else {
+            place.photo_bytes.push(None);
+        }
+    }
+    Ok(())
+}
+
+async fn get_image_descriptions(place: &mut Place) -> anyhow::Result<()> {
+    for photo_bytes in &place.photo_bytes {
+        if photo_bytes.is_none() {
+            place.photo_description.push(None);
+        } else {
+            let request = Request::builder()
+                .method(Post)
+                .uri("http://localhost:3000/image/description")
+                .build();
+            let response: Response = spin_sdk::http::send(request).await?;
+            println!("{}", response.status());
+        }
+    }
     Ok(())
 }
