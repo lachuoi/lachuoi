@@ -11,7 +11,7 @@ route = "/..."
 component = "root"
 
 [component.root]
-source = "target/wasm32-wasip1/release/root.d.wasm"
+source = "target/wasm32-wasip1/release/root.wasm"
 allowed_outbound_hosts = []
 
 [component.root.build]
