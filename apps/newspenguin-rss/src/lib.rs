@@ -88,12 +88,12 @@ async fn update_last_build_date(d: NaiveDateTime) -> anyhow::Result<()> {
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
     let execute_params = [
-        SqlValue::Text(DB_KEY_LAST_BUILD.to_string()),
         SqlValue::Text(d.to_string()),
+        SqlValue::Text(DB_KEY_LAST_BUILD.to_string()),
     ];
     let rowset = connection
         .execute(
-            "INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?);",
+            "UPDATE kv_store SET value = ? WHERE key = ?",
             execute_params.as_slice(),
         )
         .unwrap();
