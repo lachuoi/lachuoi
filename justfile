@@ -35,7 +35,7 @@ up:
     set item (string split -m 1 '=' $line)
     set -gx $item[1] $item[2]
   end
-  spin up
+  spin up --build --runtime-config-file runtime-config.dev.toml"
 
 clean:
   #!/usr/bin/env fish
