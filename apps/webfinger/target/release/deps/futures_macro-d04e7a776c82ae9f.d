@@ -1,9 +1,0 @@
-/var/home/seungjin/Works/wasm/sky/apps/root/target/release/deps/libfutures_macro-d04e7a776c82ae9f.so: /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/lib.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/executor.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/join.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/select.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/stream_select.rs
-
-/var/home/seungjin/Works/wasm/sky/apps/root/target/release/deps/futures_macro-d04e7a776c82ae9f.d: /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/lib.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/executor.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/join.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/select.rs /var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/stream_select.rs
-
-/var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/lib.rs:
-/var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/executor.rs:
-/var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/join.rs:
-/var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/select.rs:
-/var/home/seungjin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/futures-macro-0.3.28/src/stream_select.rs:
