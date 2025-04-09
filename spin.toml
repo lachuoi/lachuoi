@@ -72,7 +72,7 @@ component = "image-description"
 # cron_experssion = "0 0 * * * *"
 
 [[trigger.http]]
-route = ".webfinger/..."
+route = ".wellknown/webfinger"
 component = "webfinger"
 
 ################################################################################
