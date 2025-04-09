@@ -45,7 +45,7 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
     Ok(())
 }
 
-const NAME: &str = "newspenguin";
+const DB_KEY_LAST_BUILD: &str = "newspenguin-rss.last_build_date";
 
 async fn get_rss() -> anyhow::Result<Channel> {
     // https://docs.rs/rss/latest/rss/
@@ -66,11 +66,11 @@ async fn get_rss() -> anyhow::Result<Channel> {
 
 async fn last_build_date() -> anyhow::Result<Option<NaiveDateTime>> {
     let connection =
-        Connection::open("feedpub").expect("feedpub db connection error");
+        Connection::open("lachuoi").expect("lachuoi db connection error");
 
-    let execute_params = [SqlValue::Text(NAME.to_owned())];
+    let execute_params = [SqlValue::Text(DB_KEY_LAST_BUILD.to_string())];
     let rowset = connection.execute(
-        "SELECT last_build_date FROM last_build_date WHERE name = ? ORDER BY rowid DESC LIMIT 1",
+        "SELECT value FROM kv_store WHERE key = ?",
         execute_params.as_slice(),
     )?;
 
@@ -92,15 +92,15 @@ async fn last_build_date() -> anyhow::Result<Option<NaiveDateTime>> {
 
 async fn update_last_build_date(d: NaiveDateTime) -> anyhow::Result<()> {
     let connection =
-        Connection::open("feedpub").expect("feedpub db connection error");
+        Connection::open("lachuoi").expect("lachuoi db connection error");
     let execute_params = [
-        SqlValue::Text(NAME.to_string()),
+        SqlValue::Text(DB_KEY_LAST_BUILD.to_string()),
         SqlValue::Text(d.to_string()),
     ];
     let rowset = connection
         .execute(
             // "UPDATE last_build_date SET last_build_date = ? WHERE NAME = ?;",
-            "INSERT OR REPLACE INTO last_build_date (name, last_build_date) VALUES (?, ?);",
+            "INSERT OR REPLACE INTO kv_store (key, value) VALUES (?, ?);",
             execute_params.as_slice(),
         )
         .unwrap();
@@ -116,11 +116,11 @@ async fn update_last_build_date(d: NaiveDateTime) -> anyhow::Result<()> {
     //         execute_params.as_slice(),
     //     );
     // }
-    {
-        // DELETE FROM last_build_date WHERE rowid NOT IN ( SELECT MAX(rowid) FROM last_build_date WHERE name = "newspenguin");
-        let execute_params = [SqlValue::Text(NAME.to_string())];
-        let rowset = connection.execute("DELETE FROM last_build_date WHERE rowid NOT IN ( SELECT MAX(rowid) FROM last_build_date WHERE name = ?)", execute_params.as_slice());
-    }
+    // {
+    //     // DELETE FROM last_build_date WHERE rowid NOT IN ( SELECT MAX(rowid) FROM last_build_date WHERE name = "newspenguin");
+    //     let execute_params = [SqlValue::Text(NAME.to_string())];
+    //     let rowset = connection.execute("DELETE FROM last_build_date WHERE rowid NOT IN ( SELECT MAX(rowid) FROM last_build_date WHERE name = ?)", execute_params.as_slice());
+    // }
 
     Ok(())
 }

@@ -1,10 +1,9 @@
+[sqlite_database.lachuoi]
+type = "libsql"
+url = "https://.turso.io"
+token = "..."
+
 [sqlite_database.geoname]
 type = "libsql"
 url = "https://.turso.io"
 token = "..."
-
-[sqlite_database.feedpub]
-type = "libsql"
-url = "https://.turso.io"
-token = "..."
-

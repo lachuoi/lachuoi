@@ -45,7 +45,7 @@ component = "ip"
 
 [[trigger.cron]]
 component = "newspenguin-rss"
-cron_expression = "10 10 * * * *"
+cron_expression = "*/3 * * * * *"
 
 # [[trigger.http]]
 # route = "/image/upload/..."
@@ -99,7 +99,7 @@ source = "wasm/ip.wasm"
 
 [component.newspenguin-rss]
 source = "wasm/newspenguin_rss.wasm"
-sqlite_databases = ["feedpub"]
+sqlite_databases = ["lachuoi"]
 allowed_outbound_hosts = ["https://www.newspenguin.com", "https://feedpub-seungjin.turso.io", "https://mstd.seungjin.net"]
 
 [component.image-description]
