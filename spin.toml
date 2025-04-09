@@ -45,7 +45,7 @@ component = "ip"
 
 [[trigger.cron]]
 component = "newspenguin-rss"
-cron_expression = "0 * * * * *"
+cron_expression = "0 10 * * * *"
 
 # [[trigger.http]]
 # route = "/image/upload/..."
@@ -72,7 +72,7 @@ component = "image-description"
 # cron_experssion = "0 0 * * * *"
 
 [[trigger.http]]
-route = ".webfinger"
+route = ".webfinger/..."
 component = "webfinger"
 
 ################################################################################
@@ -118,6 +118,9 @@ allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 # [component.logger]
 # source = "wasm/logger.wasm"
 
+[component.webfinger]
+source = "wasm/webfinger.wasm"
+
 
 ################################################################################
 # Variables
@@ -159,6 +162,11 @@ command = "just build newspenguin-rss"
 
 [component.image-description.build]
 command = "just build image-description"
+
+[component.webfinger.build]
+command = "just build webfinger"
+
+
 
 # [component.logger.build]
 # command = "just build logger"
