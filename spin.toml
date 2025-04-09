@@ -32,7 +32,7 @@ component = "assets"
 
 [[trigger.cron]]
 component = "mstd-random-restaurant"
-cron_expression = "0 10 * * * *"
+cron_expression = "*/10 * * * * *"
 
 [[trigger.http]]
 route = "/random_place/..."
@@ -45,7 +45,7 @@ component = "ip"
 
 [[trigger.cron]]
 component = "newspenguin-rss"
-cron_expression = "*/3 * * * * *"
+cron_expression = "0 * * * * *"
 
 # [[trigger.http]]
 # route = "/image/upload/..."
@@ -63,7 +63,7 @@ component = "image-description"
 # route = "/logger/..."
 # component = "logger"
 
-# [][trigger.http]]
+# [[trigger.http]]
 # route = "/cert_check/..."
 # componenet = "cert-check"
 
@@ -71,6 +71,9 @@ component = "image-description"
 # component = "cert-checker"
 # cron_experssion = "0 0 * * * *"
 
+[[trigger.http]]
+route = ".webfinger"
+component = "webfinger"
 
 ################################################################################
 # Componenet

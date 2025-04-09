@@ -1,6 +1,6 @@
 [package]
 name = "root"
-authors = ["Seungjin Kim <seungjin@seungjin.net>"]
+authors = ["Seungjin Kim <seungjin@duck.com>"]
 description = ""
 version = "0.1.0"
 edition = "2021"
