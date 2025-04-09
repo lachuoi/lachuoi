@@ -87,7 +87,9 @@ source = "wasm/root.wasm"
 [component.mstd-random-restaurant]
 source = "wasm/mstd_random_restaurant.wasm"
 # allowed_outbound_hosts = ["http://random-place.spin.internal"]
+sqlite_databases = ["lachuoi"]
 allowed_outbound_hosts = ["http://localhost:3000","https://maps.googleapis.com"]
+
 
 [component.random-place]
 source = "wasm/random_place.wasm"
