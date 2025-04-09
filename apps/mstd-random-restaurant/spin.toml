@@ -1,0 +1,19 @@
+spin_manifest_version = 2
+
+[application]
+name = "mstd-random-restaurant"
+version = "0.2.0"
+authors = ["Seungjin Kim <seungjin@duck.com>"]
+description = "https://github.com/seungjin/lachuoi/apps/mstd-random-restaurant"
+
+[[trigger.cron]]
+component = "mstd-random-restaurant"
+cron_expression = "10 1 * * * *"
+
+[component.mstd-random-restaurant]
+source = "target/wasm32-wasip1/release/mstd_random_restaurant.wasm"
+allowed_outbound_hosts = []
+
+[component.mstd-random-restaurant.build]
+command = "cargo build --target wasm32-wasip1 --release"
+watch = ["src/**/*.rs", "Cargo.toml"]
