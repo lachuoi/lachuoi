@@ -1,6 +1,7 @@
 
 build app :
   #!/usr/bin/env fish
+  cd {{justfile_directory()}}
   switch "{{app}}"
     case all
         cd apps
@@ -31,6 +32,7 @@ build app :
 
 up: 
   #!/usr/bin/env fish
+  cd {{justfile_directory()}}
   for line in (cat .env | grep -v '^#' | grep -v '^[[:space:]]*$')
     set item (string split -m 1 '=' $line)
     set -gx $item[1] $item[2]
@@ -39,6 +41,7 @@ up:
 
 clean:
   #!/usr/bin/env fish
+  cd {{justfile_directory()}}
   for app in (ls -D ./apps/ | grep -v '^_')
     echo "Clean: $app"
     cd apps/$app
