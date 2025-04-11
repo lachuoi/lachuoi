@@ -1,0 +1,31 @@
+spin_manifest_version = 2
+
+[application]
+name = "mstd-random-restaurant"
+version = "0.1.0"
+authors = ["Seungjin Kim <seungjin@duck.com>"]
+description = "https://github.com/seungjin/lachuoi/apps/mstd-random-restaurant"
+
+[variables]
+internal_key = { required = true }
+mstd_random_restaurant_mstd_access_token = { required = true }
+mstd_random_restaurant_mstd_api_uri = { required = true }
+mstd_random_restaurant_google_location_api_key = { required = true }
+
+[[trigger.cron]]
+component = "mstd-random-restaurant"
+cron_expression = "*/20 * * * * *"
+
+[component.mstd-random-restaurant]
+source = "target/wasm32-wasip1/release/mstd_random_restaurant.wasm"
+sqlite_databases = ["lachuoi"]
+allowed_outbound_hosts = ["http://localhost:3000", "https://maps.googleapis.com"]
+
+[component.mstd-random-restaurant.variables]
+mstd_access_token = "{{ mstd_random_restaurant_mstd_access_token }}"
+mstd_api_uri = "{{ mstd_random_restaurant_mstd_api_uri }}"
+google_location_api_key = "{{ mstd_random_restaurant_google_location_api_key }}"
+
+[component.mstd-random-restaurant.build]
+command = "cargo build --target wasm32-wasip1 --release"
+watch = ["src/**/*.rs", "Cargo.toml"]

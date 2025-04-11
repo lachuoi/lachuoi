@@ -8,13 +8,21 @@ description = "https://github.com/seungjin/lachuoi"
 
 [variables]
 internal_key = { required = true }
+
 newspenguin_rss_uri = { required = true }
 newspenguin_mstd_api_uri = { required = true }
 newspenguin_mstd_access_token = { required = true }
+
 mstd_random_restaurant_mstd_access_token = { required = true }
 mstd_random_restaurant_mstd_api_uri = { required = true }
 mstd_random_restaurant_google_location_api_key = { required = true }
+
+mstd_random_cafe_mstd_access_token = { required = true }
+mstd_random_cafe_mstd_api_uri = { required = true }
+mstd_random_cafe_google_location_api_key = { required = true }
+
 google_ai_api_key = { required = true }
+
 image_description_google_ai_api_uri = { required = true }
 image_description_google_ai_prompt = { required = true }
 
@@ -33,6 +41,11 @@ component = "assets"
 [[trigger.cron]]
 component = "mstd-random-restaurant"
 cron_expression = "20 20 */8 * * *"
+
+[[trigger.cron]]
+component = "mstd-random-cafe"
+cron_expression = "20 20 */8 * * *"
+#cron_expression = "*/10 * * * * *"
 
 [[trigger.http]]
 route = "/random_place/..."
@@ -97,6 +110,16 @@ allowed_outbound_hosts = ["http://localhost:3000",
                           "https://seungjin.requestcatcher.com"]
 sqlite_databases = ["lachuoi"]
 
+[component.mstd-random-cafe]
+source = "wasm/mstd_random_cafe.wasm"
+# allowed_outbound_hosts = ["http://random-place.spin.internal"]
+allowed_outbound_hosts = ["http://localhost:3000",
+                          "https://maps.googleapis.com",
+                          "https://*.googleusercontent.com",
+                          "https://mstd.seungjin.net",
+                          "https://seungjin.requestcatcher.com"]
+sqlite_databases = ["lachuoi"]
+
 [component.random-place]
 source = "wasm/random_place.wasm"
 sqlite_databases = ["geoname"]
@@ -133,11 +156,15 @@ rss_uri = "{{ newspenguin_rss_uri }}"
 mstd_api_uri = "{{ newspenguin_mstd_api_uri }}" 
 mstd_access_token = "{{ newspenguin_mstd_access_token }}"
 
-
 [component.mstd-random-restaurant.variables]
 mstd_access_token = "{{ mstd_random_restaurant_mstd_access_token }}"
 mstd_api_uri = "{{ mstd_random_restaurant_mstd_api_uri }}"
 google_location_api_key = "{{ mstd_random_restaurant_google_location_api_key }}"
+
+[component.mstd-random-cafe.variables]
+mstd_access_token = "{{ mstd_random_cafe_mstd_access_token }}"
+mstd_api_uri = "{{ mstd_random_cafe_mstd_api_uri }}"
+google_location_api_key = "{{ mstd_random_cafe_google_location_api_key }}"
 
 [component.image-description.variables]
 google_ai_api_key = "{{ google_ai_api_key }}"
@@ -154,6 +181,9 @@ command = "just build root"
 [component.mstd-random-restaurant.build]
 command = "just build mstd-random-restaurant"
 
+[component.mstd-random-cafe.build]
+command = "just build mstd-random-cafe"
+
 [component.random-place.build]
 command = "just build random-place"
 
@@ -168,8 +198,6 @@ command = "just build image-description"
 
 [component.webfinger.build]
 command = "just build webfinger"
-
-
 
 # [component.logger.build]
 # command = "just build logger"

@@ -94,9 +94,9 @@ async fn near_by_search(
     place: &mut Place,
 ) -> anyhow::Result<Option<usize>> {
     let api_key = variables::get("google_location_api_key")
-        .expect("You must set the SPIN_VARIABLE_MSTD_RANDOM_RESTAURANT_GOOGLE_LOCATION_API_KEY in environment var!");
+        .expect("You must set the SPIN_VARIABLE_MSTD_RANDOM_RESTAURANT_GOOGLE_LOCATION_API_KEY in  environment var!");
     let api_url: String = format!(
-        "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={}%2C{}&radius=100000&type=restaurant&key={}",
+        "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={}%2C{}&radius=100000&type=cafe&keyword=coffee&key={}",
         geopoint.lat, geopoint.lng, api_key
     );
 
@@ -443,7 +443,7 @@ async fn post_message(place: &mut Place) -> anyhow::Result<()> {
 
     let mastodon_message: String = format!(
         "{}\n{}\n{}\nhttps://www.google.com/maps/search/\
-    ?api=1&query={},{}&query_place_id={}\n#restaurant",
+    ?api=1&query={},{}&query_place_id={}\n#coffee #cafe",
         place.name,
         place.address,
         rating_stars(place.rating).await.unwrap_or("".to_string()),
