@@ -1,5 +1,6 @@
-use rand;
+use anyhow::anyhow;
 use rand::seq::SliceRandom;
+use rand::{distr::Alphanumeric, Rng};
 use serde_json::Value;
 use spin_cron_sdk::{cron_component, Metadata};
 use spin_sdk::http::{Method::Get, Method::Post, Request, Response};
@@ -14,10 +15,19 @@ struct Place {
     place_id: String,
     address: String,
     rating: f64,
-    photo_references: Vec<Option<String>>,
-    photo_bytes: Vec<Option<Vec<u8>>>,
-    photo_description: Vec<Option<String>>,
-    mstd_media_ids: Vec<Option<i64>>,
+    photos: Vec<Photo>,
+}
+
+#[derive(Debug, Default)]
+struct Photo {
+    reference: String,
+    content_disposition: Option<String>,
+    content_length: Option<i32>,
+    content_type: Option<String>,
+    bytes: Box<Vec<u8>>,
+    owner: Option<String>,
+    description: Option<String>,
+    mstd_mediaid: Option<i64>,
 }
 
 #[derive(Debug, Clone)]
@@ -201,90 +211,147 @@ async fn get_place_details(place: &mut Place) -> anyhow::Result<()> {
 
     for i in 0..4 {
         let aa = b["result"]["photos"][i]["photo_reference"].to_owned();
-        if aa.is_null() {
-            place.photo_references.push(None);
-        } else {
-            let rf = aa.as_str().unwrap().to_owned();
-            place.photo_references.push(Some(rf));
+        if !aa.is_null() {
+            let mut photo: Photo = Photo::default();
+            photo.reference = aa.as_str().unwrap().to_owned();
+            place.photos.push(photo);
         }
     }
     Ok(())
 }
 
-const MAX_HTTP_REDIRECTION: usize = 12;
+const MAX_HTTP_REDIRECTION: usize = 5;
+
+async fn fetch_until_200(mut uri: String) -> anyhow::Result<Response> {
+    for _ in 0..MAX_HTTP_REDIRECTION {
+        let req = Request::builder().method(Get).uri(uri.clone()).build();
+        let res: Response = spin_sdk::http::send(req).await?;
+
+        match res.status() {
+            &302u16 => {
+                if let Some(location) = res.header("location") {
+                    uri = location
+                        .as_str()
+                        .ok_or_else(|| {
+                            anyhow!("Invalid 'Location' header encoding")
+                        })?
+                        .to_string();
+                } else {
+                    return Err(anyhow!(
+                        "302 response without 'Location' header"
+                    ));
+                }
+            }
+            &200u16 => return Ok(res),
+            &404u16 => return Ok(res),
+            status => {
+                return Err(anyhow!("Unexpected status code: {}", status))
+            }
+        }
+    }
+    Err(anyhow!(
+        "Too many redirects (exceeded {MAX_HTTP_REDIRECTION})"
+    ))
+}
 
 async fn get_images(place: &mut Place) -> anyhow::Result<()> {
     let api_key = variables::get("google_location_api_key")
         .expect("You must set the SPIN_VARIABLE_MSTD_RANDOM_RESTAURANT_GOOGLE_LOCATION_API_KEY in  environment var!");
-    let photo_references = &place.photo_references;
-    for reference in photo_references {
-        if reference.is_some() {
-            let aa = reference.as_ref().unwrap();
-            let image_uri = format!(
+    for photo in &mut place.photos {
+        let aa = &photo.reference;
+        let image_uri = format!(
                 "https://maps.googleapis.com/maps/api/place/photo?maxwidth=1080&photoreference={}&key={}",
                 aa, api_key
             );
-
-            let mut response: Response;
-
-            async fn sss() -> anyhow::Result<()> {
-                Ok(())
-            }
-            for _ in 0..MAX_HTTP_REDIRECTION {
-                sss().await?;
-                println!("---###########");
-                // let request =
-                //     Request::builder().method(Get).uri(&image_uri).build();
-                // response = spin_sdk::http::send(request).await?;
-
-                // if response.status() != &302u16 {
-                //     break;
-                // }
-                // let new_location =
-                //     response.header("location").unwrap().as_str().unwrap();
-            }
-
-            // let image_bytes = response.body().to_vec();
-            // place.photo_bytes.push(Some(image_bytes));
-            place.photo_bytes.push(None);
-        } else {
-            place.photo_bytes.push(None);
-        }
+        let res: Response = fetch_until_200(image_uri).await?;
+        let content_length: i32 = res
+            .header("content-length")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .parse()
+            .unwrap();
+        let content_type = res
+            .header("content-type")
+            .unwrap()
+            .as_str()
+            .unwrap_or_default();
+        let content_disposition =
+            res.header("content-disposition").unwrap().as_str().unwrap();
+        let img_bytes = res.body().to_vec();
+        photo.content_length = Some(content_length);
+        photo.content_type = Some(content_type.to_string());
+        photo.content_disposition = Some(content_disposition.to_string());
+        photo.bytes = Box::new(img_bytes);
     }
     Ok(())
 }
 
+async fn extract_filename(header: &str) -> anyhow::Result<Option<String>> {
+    Ok(header
+        .split(';')
+        .find(|part| part.trim_start().starts_with("filename="))
+        .and_then(|part| {
+            part.trim()
+                .strip_prefix("filename=")?
+                .trim_matches('"')
+                .to_owned()
+                .into()
+        }))
+}
+
+async fn build_multipart_body(
+    photo: &mut Photo,
+) -> anyhow::Result<(String, Vec<u8>)> {
+    // Generate a random boundary string
+    let boundary: String = rand::rng()
+        .sample_iter(&Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect();
+
+    // Construct the multipart form body
+    let mut body = Vec::new();
+
+    // Add the opening boundary
+    body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
+
+    // Add content disposition (assuming a file upload)
+    body.extend_from_slice(b"Content-Disposition: form-data; name=\"file\"; filename=\"upload.bin\"\r\n");
+    body.extend_from_slice(b"Content-Type: application/octet-stream\r\n\r\n");
+
+    // Add the file content
+    body.extend_from_slice(photo.bytes.as_ref());
+
+    // Add the closing boundary
+    body.extend_from_slice(format!("\r\n--{}--\r\n", boundary).as_bytes());
+
+    Ok((boundary, body))
+}
+
 async fn get_image_descriptions(place: &mut Place) -> anyhow::Result<()> {
-    for photo_bytes in &place.photo_bytes {
-        if photo_bytes.is_none() {
-            place.photo_description.push(None);
-        } else {
-            // let request = Request::builder()
-            //     .method(Method::Put)
-            //     .uri(target)
-            //     .header("Authorization", authorization)
-            //     .header("Content-Length", content_length)
-            //     //.header("Content-Type", content_type)
-            //     .header("X-Amz-Content-Sha256", x_amz_content_sha256)
-            //     .header("X-Amz-Date", x_amz_date)
-            //     .body(file.to_vec())
-            //     .build();
+    for photo in &mut place.photos {
+        // let content_length = photo.content_length;
+        println!("$$$$$$$$$$");
 
-            for _ in 0..MAX_HTTP_REDIRECTION {
-                //
-            }
-            let content_length: i32 =
-                photo_bytes.as_ref().unwrap().len().try_into().unwrap();
+        let (boundary, body) = build_multipart_body(photo).await?;
 
-            let request = Request::builder()
-                .method(Post)
-                .uri("http://localhost:3000/image/description")
-                .header("Content-Length", content_length.to_string())
-                .body("ras")
-                .build();
-            let response: Response = spin_sdk::http::send(request).await?;
-            println!("{}", response.status());
-        }
+        let content_length = body.len().to_string();
+
+        let request = Request::builder()
+            .method(Post)
+            .uri("http://localhost:3000/image/description")
+            //.uri("https://seungjin.requestcatcher.com/foo2")
+            .header(
+                "Content-Type",
+                format!("multipart/form-data; boundary={}", boundary),
+            )
+            .header("Content-Length", content_length)
+            .body(body)
+            .build();
+        let response: Response = spin_sdk::http::send(request).await?;
+        println!("{}", response.status());
+        println!("{:?}", str::from_utf8(response.body()));
     }
     Ok(())
 }
