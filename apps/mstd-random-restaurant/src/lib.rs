@@ -301,29 +301,52 @@ async fn extract_filename(header: &str) -> anyhow::Result<Option<String>> {
         }))
 }
 
+/// Manual work
 async fn build_multipart_body(
     photo: &mut Photo,
 ) -> anyhow::Result<(String, Vec<u8>)> {
     // Generate a random boundary string
-    let boundary: String = rand::rng()
-        .sample_iter(&Alphanumeric)
-        .take(32)
-        .map(char::from)
-        .collect();
+    let boundary: String = format!(
+        "------------------------{}",
+        rand::rng()
+            .sample_iter(&Alphanumeric)
+            .take(32)
+            .map(char::from)
+            .collect::<String>()
+    );
 
     // Construct the multipart form body
     let mut body = Vec::new();
 
+    let file_name =
+        extract_filename(photo.content_disposition.as_ref().unwrap())
+            .await?
+            .unwrap();
+
     // Add the opening boundary
     body.extend_from_slice(format!("--{}\r\n", boundary).as_bytes());
-
     // Add content disposition (assuming a file upload)
-    body.extend_from_slice(b"Content-Disposition: form-data; name=\"file\"; filename=\"upload.bin\"\r\n");
-    body.extend_from_slice(b"Content-Type: application/octet-stream\r\n\r\n");
-
+    body.extend_from_slice(format!("Content-Disposition: form-data; name=\"file\"; filename=\"{}\"\r\n", file_name).as_bytes());
+    body.extend_from_slice(
+        format!(
+            "Content-Type: {}\r\n\r\n",
+            photo.content_type.as_ref().unwrap()
+        )
+        .as_bytes(),
+    );
     // Add the file content
     body.extend_from_slice(photo.bytes.as_ref());
+    // Add the part closing boundary
+    body.extend_from_slice(format!("\r\n--{}\r\n", boundary).as_bytes());
 
+    //////////////////////////////////////////
+    body.extend_from_slice(
+        b"Content-Disposition: form-data; name=\"description\";\r\n\r\n",
+    );
+    if photo.description.is_some() {
+        let a: String = photo.description.clone().unwrap();
+        body.extend_from_slice(a.as_bytes());
+    }
     // Add the closing boundary
     body.extend_from_slice(format!("\r\n--{}--\r\n", boundary).as_bytes());
 
@@ -338,7 +361,7 @@ async fn get_image_descriptions(place: &mut Place) -> anyhow::Result<()> {
         let request = Request::builder()
             .method(Post)
             .uri("http://localhost:3000/image/description")
-            //.uri("https://seungjin.requestcatcher.com/foo2")
+            //.uri("https://seungjin.requestcatcher.com/foo223")
             .header(
                 "Content-Type",
                 format!("multipart/form-data; boundary={}", boundary),
@@ -347,6 +370,10 @@ async fn get_image_descriptions(place: &mut Place) -> anyhow::Result<()> {
             .body(body)
             .build();
         let response: Response = spin_sdk::http::send(request).await?;
+        let description = str::from_utf8(response.body()).unwrap();
+        let d2 = serde_json::from_str::<Value>(description).unwrap();
+        let d3 = d2.get("description").unwrap().as_str().unwrap();
+        photo.description = Some(d3.to_string());
     }
     Ok(())
 }
@@ -373,16 +400,22 @@ async fn upload_mstd_images(place: &mut Place) -> anyhow::Result<()> {
         let request = Request::builder()
             .method(Post)
             .uri(&mstd_api_uri)
-            //.uri("https://seungjin.requestcatcher.com/foo2")
+            //.uri("https://seungjin.requestcatcher.com/foo444")
             .header("AUTHORIZATION", format!("Bearer {mstd_access_token}"))
             .header(
                 "Content-Type",
                 format!("multipart/form-data; boundary={}", boundary),
             )
             .header("Content-Length", content_length)
+            .header("Accept", "*/*")
             .body(body)
             .build();
         let response: Response = spin_sdk::http::send(request).await?;
+
+        if response.status() != &200u16 {
+            println!("{}", response.status());
+            println!("{:?}", str::from_utf8(response.body()).unwrap());
+        }
 
         let mstd_image: Value =
             serde_json::from_str(str::from_utf8(response.body()).unwrap())

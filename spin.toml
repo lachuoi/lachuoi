@@ -32,7 +32,7 @@ component = "assets"
 
 [[trigger.cron]]
 component = "mstd-random-restaurant"
-cron_expression = "*/10 1 * * * *"
+cron_expression = "*/30 * * * * *"
 
 [[trigger.http]]
 route = "/random_place/..."
@@ -45,7 +45,7 @@ component = "ip"
 
 [[trigger.cron]]
 component = "newspenguin-rss"
-cron_expression = "1 * * * * *"
+cron_expression = "0 10 * * * *"
 
 # [[trigger.http]]
 # route = "/image/upload/..."
@@ -90,9 +90,12 @@ source = "wasm/root.wasm"
 [component.mstd-random-restaurant]
 source = "wasm/mstd_random_restaurant.wasm"
 # allowed_outbound_hosts = ["http://random-place.spin.internal"]
+allowed_outbound_hosts = ["http://localhost:3000",
+                          "https://maps.googleapis.com",
+                          "https://*.googleusercontent.com",
+                          "https://mstd.seungjin.net",
+                          "https://seungjin.requestcatcher.com"]
 sqlite_databases = ["lachuoi"]
-allowed_outbound_hosts = ["http://localhost:3000","https://maps.googleapis.com"]
-
 
 [component.random-place]
 source = "wasm/random_place.wasm"
