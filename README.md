@@ -10,4 +10,4 @@ Required for build
 
 ---
 Project LACHUOI is named after the Vietnamese word "lá chuối", meaning banana leaf.  
-Licensed under the AGPL v3.
+Licensed under the AGPL v3, unless otherwise noted in the app/service directory or its files.
