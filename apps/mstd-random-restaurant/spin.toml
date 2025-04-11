@@ -14,10 +14,10 @@ mstd_random_restaurant_google_location_api_key = { required = true }
 
 [[trigger.cron]]
 component = "mstd-random-restaurant"
-cron_expression = "0 10 * * * *"
+cron_expression = "*/20 * * * * *"
 
 [component.mstd-random-restaurant]
-source = "target/wasm32-wasip1/release/mastodon_random_restaurant.wasm"
+source = "target/wasm32-wasip1/release/mstd_random_restaurant.wasm"
 sqlite_databases = ["lachuoi"]
 allowed_outbound_hosts = ["http://localhost:3000", "https://maps.googleapis.com"]
 

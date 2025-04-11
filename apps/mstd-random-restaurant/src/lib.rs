@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use rand::seq::SliceRandom;
 use rand::{distr::Alphanumeric, Rng};
-use serde_json::Value;
+use serde_json::{json, Value};
 use spin_cron_sdk::{cron_component, Metadata};
 use spin_sdk::http::{Method::Get, Method::Post, Request, Response};
 use spin_sdk::variables;
@@ -53,6 +53,7 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
     get_place_details(&mut place).await?;
     get_images(&mut place).await?;
     get_image_descriptions(&mut place).await?;
+    post_message(&mut place).await?;
 
     println!("------");
     Ok(())
@@ -331,11 +332,7 @@ async fn build_multipart_body(
 
 async fn get_image_descriptions(place: &mut Place) -> anyhow::Result<()> {
     for photo in &mut place.photos {
-        // let content_length = photo.content_length;
-        println!("$$$$$$$$$$");
-
         let (boundary, body) = build_multipart_body(photo).await?;
-
         let content_length = body.len().to_string();
 
         let request = Request::builder()
@@ -350,8 +347,97 @@ async fn get_image_descriptions(place: &mut Place) -> anyhow::Result<()> {
             .body(body)
             .build();
         let response: Response = spin_sdk::http::send(request).await?;
-        println!("{}", response.status());
-        println!("{:?}", str::from_utf8(response.body()));
     }
+    Ok(())
+}
+
+async fn rating_stars(rating: f64) -> anyhow::Result<String> {
+    let major: usize = (rating - (rating % 1.0)) as usize;
+    let minor: f64 = rating % 1.0;
+    let mut star: String = "★".repeat(major);
+    if minor > 0.0 {
+        star = format!("{star}☆");
+    }
+    Ok(star)
+}
+
+async fn upload_mstd_images(place: &mut Place) -> anyhow::Result<()> {
+    let mstd_api_uri =
+        format!("{}/api/v2/media", variables::get("mstd_api_uri").unwrap());
+    let mstd_access_token = variables::get("mstd_access_token").unwrap();
+
+    for photo in &mut place.photos {
+        let (boundary, body) = build_multipart_body(photo).await?;
+        let content_length = body.len().to_string();
+
+        let request = Request::builder()
+            .method(Post)
+            .uri(&mstd_api_uri)
+            //.uri("https://seungjin.requestcatcher.com/foo2")
+            .header("AUTHORIZATION", format!("Bearer {mstd_access_token}"))
+            .header(
+                "Content-Type",
+                format!("multipart/form-data; boundary={}", boundary),
+            )
+            .header("Content-Length", content_length)
+            .body(body)
+            .build();
+        let response: Response = spin_sdk::http::send(request).await?;
+
+        let mstd_image: Value =
+            serde_json::from_str(str::from_utf8(response.body()).unwrap())
+                .unwrap();
+        let a = mstd_image["id"].as_str().unwrap().parse::<i64>().unwrap();
+        photo.mstd_mediaid = Some(a);
+    }
+
+    Ok(())
+}
+
+async fn post_message(place: &mut Place) -> anyhow::Result<()> {
+    upload_mstd_images(place).await?;
+
+    let mstd_api_uri = format!(
+        "{}/api/v1/statuses",
+        variables::get("mstd_api_uri").unwrap()
+    );
+    let mstd_access_token = variables::get("mstd_access_token").unwrap();
+
+    let mut mstd_media_ids: Vec<i64> = Vec::new();
+    for photo in &mut place.photos {
+        mstd_media_ids.push(photo.mstd_mediaid.unwrap());
+    }
+
+    let mastodon_message: String = format!(
+        "{}\n{}\n{}\nhttps://www.google.com/maps/search/\
+    ?api=1&query={},{}&query_place_id={}\n#coffee #cafe",
+        place.name,
+        place.address,
+        rating_stars(place.rating).await.unwrap_or("".to_string()),
+        place.lat,
+        place.lng,
+        place.place_id,
+    );
+
+    let body = json!({
+        "status": mastodon_message,
+        "visibility": "public",
+        "language": "eng",
+        "media_ids": mstd_media_ids,
+    });
+
+    let content_length = body.to_string().as_bytes().len().to_string();
+
+    let request = Request::builder()
+        .method(Post)
+        .uri(&mstd_api_uri)
+        //.uri("https://seungjin.requestcatcher.com/foo2")
+        .header("Content-Type", "application/json")
+        .header("AUTHORIZATION", format!("Bearer {mstd_access_token}"))
+        .header("Content-Length", content_length)
+        .body(serde_json::to_string(&body).unwrap())
+        .build();
+    let response: Response = spin_sdk::http::send(request).await?;
+
     Ok(())
 }
