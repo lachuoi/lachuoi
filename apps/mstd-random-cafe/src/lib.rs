@@ -40,6 +40,8 @@ struct Geopoint {
 
 #[cron_component]
 async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
+    println!("random-cafe starting");
+
     let mut place: Place = Place::default();
 
     let _ = loop {
@@ -50,12 +52,13 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
         }
         std::thread::sleep(std::time::Duration::from_millis(2_500));
     };
+
     get_place_details(&mut place).await?;
     get_images(&mut place).await?;
     get_image_descriptions(&mut place).await?;
     post_message(&mut place).await?;
 
-    println!("------");
+    println!("random-cafe done");
     Ok(())
 }
 
@@ -85,7 +88,6 @@ async fn random_place() -> anyhow::Result<Vec<Geopoint>> {
         };
         locations.push(geopoint);
     }
-
     Ok(locations)
 }
 
@@ -208,7 +210,10 @@ async fn get_place_details(place: &mut Place) -> anyhow::Result<()> {
     let a = str::from_utf8(response.body()).unwrap();
     let b: Value = serde_json::from_str(a).unwrap();
 
-    place.address = b["result"]["formatted_address"].to_string();
+    place.address = b["result"]["formatted_address"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     for i in 0..4 {
         let aa = b["result"]["photos"][i]["photo_reference"].to_owned();

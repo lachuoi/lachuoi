@@ -208,7 +208,10 @@ async fn get_place_details(place: &mut Place) -> anyhow::Result<()> {
     let a = str::from_utf8(response.body()).unwrap();
     let b: Value = serde_json::from_str(a).unwrap();
 
-    place.address = b["result"]["formatted_address"].to_string();
+    place.address = b["result"]["formatted_address"]
+        .as_str()
+        .unwrap()
+        .to_string();
 
     for i in 0..4 {
         let aa = b["result"]["photos"][i]["photo_reference"].to_owned();
