@@ -32,7 +32,7 @@ component = "assets"
 
 [[trigger.cron]]
 component = "mstd-random-restaurant"
-cron_expression = "*/30 * * * * *"
+cron_expression = "20 20 */8 * * *"
 
 [[trigger.http]]
 route = "/random_place/..."
