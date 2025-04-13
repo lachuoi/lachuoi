@@ -172,3 +172,34 @@ google_ai_api_key = "{{ google_ai_api_key }}"
 google_ai_api_uri = "{{ image_description_google_ai_api_uri }}"
 google_ai_prompt =  "{{ image_description_google_ai_prompt }}"
 
+################################################################################
+# Build
+################################################################################
+
+[component.root.build]
+command = "just build root"
+
+[component.mstd-random-restaurant.build]
+command = "just build mstd-random-restaurant"
+
+[component.mstd-random-cafe.build]
+command = "just build mstd-random-cafe"
+
+[component.random-place.build]
+command = "just build random-place"
+
+[component.ipconfig.build]
+command = "just build ipconfig"
+
+[component.newspenguin-rss.build]
+command = "just build newspenguin-rss"
+
+[component.image-description.build]
+command = "just build image-description"
+
+[component.webfinger.build]
+command = "just build webfinger"
+
+# [component.logger.build]
+# command = "just build logger"
+
