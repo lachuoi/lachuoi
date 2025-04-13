@@ -60,7 +60,7 @@ async fn weighted_random_location(
             let connection = Connection::open("geoname")
                 .expect("geoname libsql connection error");
             let rowset = connection.execute(
-                "SELECT rowid, population FROM cities15000",
+                "SELECT rowid, population FROM cities15000 WHERE country != \"CN\"",
                 [].as_slice(),
             );
             let rows = rowset.unwrap().rows;
