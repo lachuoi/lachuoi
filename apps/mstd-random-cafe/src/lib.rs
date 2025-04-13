@@ -448,7 +448,7 @@ async fn post_message(place: &mut Place) -> anyhow::Result<()> {
 
     let mastodon_message: String = format!(
         "{}\n{}\n{}\nhttps://www.google.com/maps/search/\
-    ?api=1&query={},{}&query_place_id={}\n#coffee #cafe",
+    ?api=1&query={},{}&query_place_id={}\n#coffee #cafe #travel",
         place.name,
         place.address,
         rating_stars(place.rating).await.unwrap_or("".to_string()),

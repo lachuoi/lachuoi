@@ -446,7 +446,7 @@ async fn post_message(place: &mut Place) -> anyhow::Result<()> {
 
     let mastodon_message: String = format!(
         "{}\n{}\n{}\nhttps://www.google.com/maps/search/\
-    ?api=1&query={},{}&query_place_id={}\n#restaurant",
+    ?api=1&query={},{}&query_place_id={}\n#restaurant #travel",
         place.name,
         place.address,
         rating_stars(place.rating).await.unwrap_or("".to_string()),
@@ -462,7 +462,7 @@ async fn post_message(place: &mut Place) -> anyhow::Result<()> {
         "media_ids": mstd_media_ids,
     });
 
-    let content_length = body.to_string().as_bytes().len().to_string();
+    let content_length = body.to_string().len().to_string();
 
     let request = Request::builder()
         .method(Post)
