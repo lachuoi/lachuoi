@@ -65,7 +65,7 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
 async fn random_place() -> anyhow::Result<Vec<Geopoint>> {
     let request = Request::builder()
         .method(Get)
-        .uri("http://localhost:3000/random-place")
+        .uri("http://localhost:3000/random-place/weighted/population")
         // .uri("http://random-place.spin.internal")
         .build();
     let response: Response = spin_sdk::http::send(request)
