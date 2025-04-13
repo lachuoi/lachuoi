@@ -48,8 +48,8 @@ cron_expression = "20 20 */8 * * *"
 #cron_expression = "*/10 * * * * *"
 
 [[trigger.http]]
-route = "/random_place/..."
 # route = { private = true }
+route = "/random-place/..."
 component = "random-place"
 
 [[trigger.http]]
@@ -122,7 +122,8 @@ sqlite_databases = ["lachuoi"]
 
 [component.random-place]
 source = "wasm/random_place.wasm"
-sqlite_databases = ["geoname"]
+key_value_stores = ["mem"]
+sqlite_databases = ["geoname", "mem"]
 allowed_outbound_hosts = ["https://geoname-seungjin.turso.io"]
 
 [component.ipconfig]

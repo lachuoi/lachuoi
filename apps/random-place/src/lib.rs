@@ -1,27 +1,31 @@
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use rand::distr::weighted::WeightedIndex;
+use rand::prelude::*;
 use serde_json::{json, Value};
-
 use spin_sdk::{
-    http::{IntoResponse, Method, Params, Request, Response},
+    http::{IntoResponse, Params, Request, Response, Router},
     http_component,
+    key_value::Store,
     sqlite::{Connection, QueryResult, Value as SqlValue},
 };
-use std::collections::HashMap;
-use std::{env, str};
 
 /// A simple Spin HTTP component.
 #[http_component]
 async fn handle_root(req: Request) -> Result<impl IntoResponse> {
-    let out = random_location().await?;
-    Ok(Response::builder()
-        .status(200)
-        .header("content-type", "application/json")
-        .body(out)
-        .build())
+    let mut router = Router::new();
+    router.get_async("/random-place/weighted", weighted_random_location);
+    router.get_async(
+        "/random-place/weighted/population",
+        weighted_random_location,
+    );
+    router.any_async("/random-place", random_location);
+    Ok(router.handle(req))
 }
 
-async fn random_location() -> Result<String> {
+async fn random_location(
+    _req: Request,
+    _params: Params,
+) -> anyhow::Result<impl IntoResponse> {
     let connection =
         Connection::open("geoname").expect("geoname libsql connection error");
 
@@ -31,7 +35,67 @@ async fn random_location() -> Result<String> {
         execute_params.as_slice(),
     )?;
 
-    Ok(query_result_to_json(&rowset))
+    Ok(Response::builder()
+        .status(200)
+        .header("content-type", "application/json")
+        .body(query_result_to_json(&rowset))
+        .build())
+}
+
+const CACHEKEY: &str = "city-pop-pair";
+async fn weighted_random_location(
+    _req: Request,
+    _params: Params,
+) -> Result<Response> {
+    // https://docs.rs/rand/latest/rand/distr/weighted/struct.WeightedIndex.html
+    let cache = Store::open("mem")?;
+
+    let a = match cache.get(CACHEKEY)? {
+        Some(x) => {
+            println!("Cache retrived");
+            String::from_utf8(x).unwrap()
+        }
+        None => {
+            println!("Writing to cache");
+            let connection = Connection::open("geoname")
+                .expect("geoname libsql connection error");
+            let rowset = connection.execute(
+                "SELECT rowid, population FROM cities15000",
+                [].as_slice(),
+            );
+            let rows = rowset.unwrap().rows;
+            let cities_poplulation: Vec<(u64, u64)> = rows
+                .iter()
+                .map(|r| (r.get::<u64>(0).unwrap(), r.get::<u64>(1).unwrap()))
+                .collect();
+
+            let json_str = serde_json::to_string(&cities_poplulation).unwrap();
+
+            let cache = Store::open("mem")?;
+            cache.set(CACHEKEY, json_str.as_bytes())?;
+            json_str
+        }
+    };
+
+    let data: Vec<(u64, u64)> = serde_json::from_str(a.as_str()).unwrap();
+    let mut rng = rand::rng();
+    let dist =
+        WeightedIndex::new(data.iter().map(|item| item.1 as f64)).unwrap();
+    let random_index = dist.sample(&mut rng) as i64;
+
+    let connection =
+        Connection::open("geoname").expect("geoname libsql connection error");
+    let execute_params = [SqlValue::Integer(random_index)];
+    let rowset = connection.execute(
+        "SELECT alternatenames, asciiname, country, elevation, fclass, latitude, longitude, moddate, name, population, timezone FROM cities15000 WHERE rowid = ?",
+        execute_params.as_slice(),
+    )?;
+
+    Ok(Response::builder()
+        .status(200)
+        .header("content-type", "application/json")
+        .body(query_result_to_json(&rowset))
+        .build())
 }
 
 fn query_result_to_json(query_result: &QueryResult) -> String {
