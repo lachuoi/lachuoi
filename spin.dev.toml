@@ -211,4 +211,8 @@ command = "just build webfinger"
 # command = "just build logger"
 
 [component.hello-grain.build]
-command = "cd apps/hello-grain; grain compile ./src/main.gr -o ../../wasm/hello_grain.wasm; chmod +x ../../wasm/hello_grain.wasm"
+command = "cd apps/hello-grain; grain compile --release --use-start-section -o ../../wasm/hello_grain.wasm ./src/main.gr; chmod +x ../../wasm/hello_grain.wasm"
+
+
+
+
