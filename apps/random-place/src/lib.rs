@@ -59,9 +59,10 @@ async fn weighted_random_location(
             println!("Writing to cache");
             let connection = Connection::open("geoname")
                 .expect("geoname libsql connection error");
+            let execute_params = [SqlValue::Integer(50000)];
             let rowset = connection.execute(
-                "SELECT rowid, population FROM cities15000 WHERE country != \"CN\"",
-                [].as_slice(),
+                "SELECT rowid, population FROM cities15000 WHERE country != \"CN\" AND population > ?",
+                execute_params.as_slice(),
             );
             let rows = rowset.unwrap().rows;
             let cities_poplulation: Vec<(u64, u64)> = rows
