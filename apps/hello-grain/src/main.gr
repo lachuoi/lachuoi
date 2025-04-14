@@ -1,27 +1,9 @@
 module Main
 
-from "wasi/process" include Process
-from "array" include Array
-
-print("content-type: text/plain\n")
-
-// This will print all the Wagi env variables
-print("==== Environment: ====")
-match (Process.env()) {
-  Ok(envs) => Array.forEach((env) => {
-    print(env)
-  }, envs),
-  Err(_) => print("Failed to get environment variables.")
-}
-
-// This will print the route path followed by each query
-// param. So /foo?bar=baz will be ["/foo", "bar=baz"].
-print("==== Args: ====")
-match (Process.argv()) {
-  Ok(args) => Array.forEach((arg) => {
-    print(arg)
-  }, args),
-  Err(_) => print("Failed to get arguments.")
+provide let _start = () => {
+  print("content-type: text/plain")
+  print("")
+  print("Hello, World")
 }
 
 

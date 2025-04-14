@@ -13,9 +13,9 @@ component = "hello-grain"
 executor = { type = "wagi" }
 
 [component.hello-grain]
-source = "wasm/hello_grain.wasm"
+source = "./wasm/main.wasm"
 allowed_outbound_hosts = []
 
 [component.hello-grain.build]
-command = "grain compile -o wasm/hello_grain.wasm ./src/main.gr"
-
+# command = "grain compile --release --use-start-section -o wasm/hello_grain.wasm ./src/main.gr"
+command = "grain compile --release --use-start-section -o ./wasm/main.wasm ./src/main.gr"
