@@ -88,6 +88,11 @@ component = "image-description"
 route = ".wellknown/webfinger"
 component = "webfinger"
 
+[[trigger.http]]
+route = "/edge/grain/..."
+component = "hello-grain"
+executor = { type = "wagi" }
+
 ################################################################################
 # Componenet
 ################################################################################
@@ -148,6 +153,8 @@ allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 [component.webfinger]
 source = "wasm/webfinger.wasm"
 
+[component.hello-grain]
+source = "wasm/hello_grain.wasm"
 
 ################################################################################
 # Variables
@@ -203,3 +210,5 @@ command = "just build webfinger"
 # [component.logger.build]
 # command = "just build logger"
 
+[component.hello-grain.build]
+command = "cd apps/hello-grain; grain compile ./src/main.gr -o ../../wasm/hello_grain.wasm; chmod +x ../../wasm/hello_grain.wasm"

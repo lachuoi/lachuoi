@@ -1,0 +1,21 @@
+spin_manifest_version = 2
+
+[application]
+name = "hello-grain"
+version = "0.1.0"
+authors = ["Seungjin Kim <seungjin@duck.com>"]
+description = ""
+
+# https://spinframework.dev/v3/http-trigger#http-with-wagi-webassembly-gateway-interface
+[[trigger.http]]
+route = "/..."
+component = "hello-grain"
+executor = { type = "wagi" }
+
+[component.hello-grain]
+source = "wasm/hello_grain.wasm"
+allowed_outbound_hosts = []
+
+[component.hello-grain.build]
+command = "grain compile -o wasm/hello_grain.wasm ./src/main.gr"
+
