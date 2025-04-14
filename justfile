@@ -10,7 +10,7 @@ build app :
             echo
             echo "Build: $app"
             cd $app
-            cargo build --target wasm32-wasip1 --release || exit
+            spin build || exit
             set WASM_FILE (echo $app | tr '-' '_')
             cp target/wasm32-wasip1/release/$WASM_FILE.wasm ../../wasm/
             cd ..
@@ -22,7 +22,7 @@ build app :
         printf "#%.0s" (seq 80)
         echo
         cd apps/{{app}}
-        cargo build --target wasm32-wasip1 --release || exit
+        spin build || exit
         set WASM_FILE (echo "{{app}}" | tr '-' '_')
         cp target/wasm32-wasip1/release/$WASM_FILE.wasm ../../wasm/
         printf "#%.0s" (seq 80)
