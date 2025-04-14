@@ -12,6 +12,11 @@ use std::str::{self};
 async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
     println!("Newspenguin RSS starting");
 
+    if check_lock().unwrap().is_some() {
+        println!("process lock exist - exit");
+        return Ok(());
+    }
+
     let channel = get_rss().await.unwrap();
 
     let rss_last_build_date = NaiveDateTime::parse_from_str(
@@ -172,4 +177,8 @@ async fn post_to_mastodon(msgs: Vec<Item>) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn check_lock() -> anyhow::Result<Option<()>> {
+    Ok(Some(()))
 }
