@@ -18,4 +18,4 @@ allowed_outbound_hosts = []
 
 [component.hello-grain.build]
 # command = "grain compile --release --use-start-section -o wasm/hello_grain.wasm ./src/main.gr"
-command = "grain compile --release --use-start-section -o ./wasm/main.wasm ./src/main.gr"
+command = "mkdir -p ./target/wasm32-wasip1/release; grain compile --release --use-start-section -o ./target/wasm32-wasip1/release/hello_grain.wasm ./src/main.gr"
