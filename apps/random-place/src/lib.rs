@@ -59,17 +59,18 @@ async fn weighted_random_location(
             println!("Writing to cache");
             let connection = Connection::open("geoname")
                 .expect("geoname libsql connection error");
+            let execute_params = [SqlValue::Integer(50_000)];
             let rowset = connection.execute(
-                "SELECT rowid, population FROM cities15000 WHERE country != \"CN\"",
-                [].as_slice(),
+                "SELECT rowid, population FROM cities15000 WHERE country IS NOT \"CN\" AND population >= ?",
+                execute_params.as_slice(),
             );
             let rows = rowset.unwrap().rows;
-            let cities_poplulation: Vec<(u64, u64)> = rows
+            let cities_population: Vec<(u64, u64)> = rows
                 .iter()
                 .map(|r| (r.get::<u64>(0).unwrap(), r.get::<u64>(1).unwrap()))
                 .collect();
 
-            let json_str = serde_json::to_string(&cities_poplulation).unwrap();
+            let json_str = serde_json::to_string(&cities_population).unwrap();
 
             let cache = Store::open("mem")?;
             cache.set(CACHEKEY, json_str.as_bytes())?;
@@ -81,11 +82,13 @@ async fn weighted_random_location(
     let mut rng = rand::rng();
     let dist =
         WeightedIndex::new(data.iter().map(|item| item.1 as f64)).unwrap();
-    let random_index = dist.sample(&mut rng) as i64;
+    let random_index = dist.sample(&mut rng);
+
+    let &(id, _value) = data.get(random_index).unwrap();
 
     let connection =
         Connection::open("geoname").expect("geoname libsql connection error");
-    let execute_params = [SqlValue::Integer(random_index)];
+    let execute_params = [SqlValue::Integer(id as i64)];
     let rowset = connection.execute(
         "SELECT alternatenames, asciiname, country, elevation, fclass, latitude, longitude, moddate, name, population, timezone FROM cities15000 WHERE rowid = ?",
         execute_params.as_slice(),
