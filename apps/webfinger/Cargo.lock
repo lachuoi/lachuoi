@@ -718,6 +718,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "http 0.2.12",
+ "serde_json",
  "spin-sdk",
 ]
 
