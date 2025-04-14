@@ -123,7 +123,7 @@ key_value_stores = ["mem"]
 sqlite_databases = ["geoname", "mem"]
 allowed_outbound_hosts = ["https://geoname-seungjin.turso.io"]
 
-[component.ip]
+[component.ipconfig]
 source = "wasm/ipconfig.wasm"
 
 [component.newspenguin-rss]
