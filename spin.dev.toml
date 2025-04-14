@@ -85,13 +85,14 @@ component = "image-description"
 # cron_experssion = "0 0 * * * *"
 
 [[trigger.http]]
-route = ".wellknown/webfinger"
+route = ".well-known/webfinger"
 component = "webfinger"
 
 [[trigger.http]]
 route = "/edge/grain/..."
 component = "hello-grain"
 executor = { type = "wagi" }
+
 
 ################################################################################
 # Componenet
