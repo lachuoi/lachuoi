@@ -1,4 +1,4 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use rss::{Channel, Item};
 use spin_cron_sdk::{cron_component, Metadata};
 use spin_sdk::{
@@ -12,13 +12,21 @@ use std::str::{self};
 async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
     println!("Newspenguin RSS starting");
 
+    if check_process_lock().unwrap().is_some() {
+        println!("Newspenguin process lock exist - exit");
+        println!("Newspenguin RSS finished");
+        return Ok(());
+    }
+
+    process_lock()?;
+
     let channel = get_rss().await.unwrap();
 
     let rss_last_build_date = NaiveDateTime::parse_from_str(
         channel.last_build_date().unwrap(),
         "%Y-%m-%d %H:%M:%S",
     )
-    .expect("Failed to parse date");
+    .expect("Newspenguin Failed to parse date");
 
     let recorded_last_build_date = last_build_date().await?;
 
@@ -38,10 +46,13 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
 
     println!("Newspenguin RSS finished");
 
+    process_unlock()?;
+
     Ok(())
 }
 
 const DB_KEY_LAST_BUILD: &str = "newspenguin-rss.last_build_date";
+const DB_KEY_LOCK: &str = "newspenguin-rss.lock";
 
 async fn get_rss() -> anyhow::Result<Channel> {
     let rss_uri = variables::get("rss_uri").unwrap();
@@ -171,5 +182,65 @@ async fn post_to_mastodon(msgs: Vec<Item>) -> anyhow::Result<()> {
         }
     }
 
+    Ok(())
+}
+
+fn check_process_lock() -> anyhow::Result<Option<()>> {
+    let connection =
+        Connection::open("lachuoi").expect("lachuoi db connection error");
+
+    let execute_params = [SqlValue::Text(DB_KEY_LOCK.to_string())];
+    let rowset = connection.execute(
+        "SELECT updated_at FROM kv_store WHERE key = ? ORDER BY updated_at DESC LIMIT 1",
+        execute_params.as_slice(),
+    )?;
+
+    if rowset.rows().count() == 0 {
+        return Ok(None);
+    }
+
+    let updated_at = rowset.rows[0].get::<&str>(0).unwrap();
+
+    let naive_dt =
+        NaiveDateTime::parse_from_str(updated_at, "%Y-%m-%d %H:%M:%S")
+            .expect("Newspenguin Failed to parse datetime");
+
+    // Assume it's already in UTC (you can adjust here if it's in local time or another zone)
+    let utc_dt: DateTime<Utc> =
+        DateTime::<Utc>::from_naive_utc_and_offset(naive_dt, Utc);
+
+    let now = Utc::now();
+    let one_hour_ago = now - Duration::minutes(15);
+
+    if utc_dt < one_hour_ago {
+        println!("Newspenguin lock process is older than 15 min. unlock it.");
+        process_unlock()?; // Unlock process that is older than 15 min.
+        return Ok(None);
+    };
+
+    Ok(Some(()))
+}
+
+fn process_lock() -> anyhow::Result<()> {
+    println!("Newspenguin process lock");
+    let connection =
+        Connection::open("lachuoi").expect("lachuoi db connection error");
+    let execute_params = [SqlValue::Text(DB_KEY_LOCK.to_string())];
+    let rowset = connection.execute(
+        "INSERT INTO kv_store (key,value) VALUES (?, NULL)",
+        execute_params.as_slice(),
+    )?;
+    Ok(())
+}
+
+fn process_unlock() -> anyhow::Result<()> {
+    println!("Newspenguin process unlock");
+    let connection =
+        Connection::open("lachuoi").expect("lachuoi db connection error");
+    let execute_params = [SqlValue::Text(DB_KEY_LOCK.to_string())];
+    let rowset = connection.execute(
+        "DELETE FROM kv_store WHERE key = ?",
+        execute_params.as_slice(),
+    )?;
     Ok(())
 }
