@@ -40,15 +40,16 @@ component = "assets"
 
 [[trigger.cron]]
 component = "mstd-random-restaurant"
-cron_expression = "0 20 0,6,12,18 * * *"
+cron_expression = "20 20 */8 * * *"
 
 [[trigger.cron]]
 component = "mstd-random-cafe"
-cron_expression = "0 40 3,9,15,21 * * *"
+cron_expression = "20 20 */8 * * *"
+#cron_expression = "*/10 * * * * *"
 
 [[trigger.http]]
-route = "/random-place/..."
 # route = { private = true }
+route = "/random-place/..."
 component = "random-place"
 
 [[trigger.http]]
@@ -87,6 +88,11 @@ component = "image-description"
 route = ".wellknown/webfinger"
 component = "webfinger"
 
+[[trigger.http]]
+route = "/edge/grain/..."
+component = "hello-grain"
+executor = { type = "wagi" }
+
 ################################################################################
 # Componenet
 ################################################################################
@@ -105,7 +111,8 @@ source = "wasm/mstd_random_restaurant.wasm"
 allowed_outbound_hosts = ["http://localhost:3000",
                           "https://maps.googleapis.com",
                           "https://*.googleusercontent.com",
-                          "https://mstd.seungjin.net"]
+                          "https://mstd.seungjin.net",
+                          "https://seungjin.requestcatcher.com"]
 sqlite_databases = ["lachuoi"]
 
 [component.mstd-random-cafe]
@@ -114,7 +121,8 @@ source = "wasm/mstd_random_cafe.wasm"
 allowed_outbound_hosts = ["http://localhost:3000",
                           "https://maps.googleapis.com",
                           "https://*.googleusercontent.com",
-                          "https://mstd.seungjin.net"]
+                          "https://mstd.seungjin.net",
+                          "https://seungjin.requestcatcher.com"]
 sqlite_databases = ["lachuoi"]
 
 [component.random-place]
@@ -123,7 +131,7 @@ key_value_stores = ["mem"]
 sqlite_databases = ["geoname", "mem"]
 allowed_outbound_hosts = ["https://geoname-seungjin.turso.io"]
 
-[component.ip]
+[component.ipconfig]
 source = "wasm/ipconfig.wasm"
 
 [component.newspenguin-rss]
@@ -145,6 +153,8 @@ allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 [component.webfinger]
 source = "wasm/webfinger.wasm"
 
+[component.hello-grain]
+source = "wasm/hello_grain.wasm"
 
 ################################################################################
 # Variables
@@ -153,7 +163,6 @@ source = "wasm/webfinger.wasm"
 rss_uri = "{{ newspenguin_rss_uri }}"
 mstd_api_uri = "{{ newspenguin_mstd_api_uri }}" 
 mstd_access_token = "{{ newspenguin_mstd_access_token }}"
-
 
 [component.mstd-random-restaurant.variables]
 mstd_access_token = "{{ mstd_random_restaurant_mstd_access_token }}"
@@ -170,4 +179,36 @@ google_ai_api_key = "{{ google_ai_api_key }}"
 google_ai_api_uri = "{{ image_description_google_ai_api_uri }}"
 google_ai_prompt =  "{{ image_description_google_ai_prompt }}"
 
+################################################################################
+# Build
+################################################################################
 
+[component.root.build]
+command = "just build root"
+
+[component.mstd-random-restaurant.build]
+command = "just build mstd-random-restaurant"
+
+[component.mstd-random-cafe.build]
+command = "just build mstd-random-cafe"
+
+[component.random-place.build]
+command = "just build random-place"
+
+[component.ipconfig.build]
+command = "just build ipconfig"
+
+[component.newspenguin-rss.build]
+command = "just build newspenguin-rss"
+
+[component.image-description.build]
+command = "just build image-description"
+
+[component.webfinger.build]
+command = "just build webfinger"
+
+# [component.logger.build]
+# command = "just build logger"
+
+[component.hello-grain.build]
+command = "cd apps/hello-grain; grain compile ./src/main.gr -o ../../wasm/hello_grain.wasm; chmod +x ../../wasm/hello_grain.wasm"

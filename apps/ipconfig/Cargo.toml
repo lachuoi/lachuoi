@@ -1,5 +1,5 @@
 [package]
-name = "ip"
+name = "ipconfig"
 authors = ["Seungjin Kim <seungjin@seungjin.net>"]
 description = "geoip"
 version = "0.1.0"

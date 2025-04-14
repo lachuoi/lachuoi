@@ -41,7 +41,7 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
         update_last_build_date(rss_last_build_date).await?;
     }
 
-    println!("Newspenglin RSS finished");
+    println!("Newspenguin RSS finished");
 
     Ok(())
 }

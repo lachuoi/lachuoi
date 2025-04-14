@@ -40,6 +40,8 @@ struct Geopoint {
 
 #[cron_component]
 async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
+    println!("random-cafe starting");
+
     let mut place: Place = Place::default();
 
     let _ = loop {
@@ -50,12 +52,13 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
         }
         std::thread::sleep(std::time::Duration::from_millis(2_500));
     };
+
     get_place_details(&mut place).await?;
     get_images(&mut place).await?;
     get_image_descriptions(&mut place).await?;
     post_message(&mut place).await?;
 
-    println!("------");
+    println!("random-cafe done");
     Ok(())
 }
 
@@ -85,7 +88,6 @@ async fn random_place() -> anyhow::Result<Vec<Geopoint>> {
         };
         locations.push(geopoint);
     }
-
     Ok(locations)
 }
 
@@ -94,9 +96,9 @@ async fn near_by_search(
     place: &mut Place,
 ) -> anyhow::Result<Option<usize>> {
     let api_key = variables::get("google_location_api_key")
-        .expect("You must set the SPIN_VARIABLE_MSTD_RANDOM_RESTAURANT_GOOGLE_LOCATION_API_KEY in environment var!");
+        .expect("You must set the SPIN_VARIABLE_MSTD_RANDOM_RESTAURANT_GOOGLE_LOCATION_API_KEY in  environment var!");
     let api_url: String = format!(
-        "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={}%2C{}&radius=100000&type=restaurant&key={}",
+        "https://maps.googleapis.com/maps/api/place/nearbysearch/json?location={}%2C{}&radius=100000&type=cafe&keyword=coffee&key={}",
         geopoint.lat, geopoint.lng, api_key
     );
 
@@ -446,7 +448,7 @@ async fn post_message(place: &mut Place) -> anyhow::Result<()> {
 
     let mastodon_message: String = format!(
         "{}\n{}\n{}\nhttps://www.google.com/maps/search/\
-    ?api=1&query={},{}&query_place_id={}\n#restaurant #travel",
+    ?api=1&query={},{}&query_place_id={}\n#coffee #cafe #travel",
         place.name,
         place.address,
         rating_stars(place.rating).await.unwrap_or("".to_string()),
@@ -462,7 +464,7 @@ async fn post_message(place: &mut Place) -> anyhow::Result<()> {
         "media_ids": mstd_media_ids,
     });
 
-    let content_length = body.to_string().len().to_string();
+    let content_length = body.to_string().as_bytes().len().to_string();
 
     let request = Request::builder()
         .method(Post)

@@ -1,7 +1,7 @@
 [package]
-name = "mstd-random-restaurant"
+name = "mstd-random-cafe"
 authors = ["Seungjin Kim <seungjin@duck.com>"]
-description = "mstd.seungjin.net/@_random_restarurant"
+description = "mstd.seungjin.net/@_random_cafe"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.71"
