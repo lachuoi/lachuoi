@@ -15,6 +15,16 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
         maxminddb::Reader::open_readfile("GeoLite2-City.mmdb").unwrap();
 
     let query = req.query();
+
+    if query.is_empty() {
+        let message = format!("USAGE: {}?8.8.8.8", req.path());
+        return Ok(Response::builder()
+            .status(200)
+            .header("content-type", "plain/text")
+            .body(message)
+            .build());
+    }
+
     let ip = match IpAddr::from_str(query) {
         Ok(ip) => ip,
         Err(_) => {
