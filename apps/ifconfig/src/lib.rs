@@ -17,20 +17,16 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
         None => spin_client_addr,
     };
 
-    let socket_addr: SocketAddr =
-        x_forwarded_for.parse().expect("Invalid socket address");
-
     Ok(Response::builder()
         .status(200)
         .header("content-type", "text/plain")
-        .body(socket_addr.ip().to_string())
+        .body(x_forwarded_for.to_string())
         .build())
 }
 
 async fn whoyouare(req: &Request) -> Result<()> {
     let headers = req.headers();
     let method = req.method().to_string();
-
     for header in headers {
         println!("{}: {}", header.0, header.1.as_str().unwrap());
     }

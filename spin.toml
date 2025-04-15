@@ -87,6 +87,10 @@ component = "image-description"
 route = ".wellknown/webfinger"
 component = "webfinger"
 
+[[trigger.geoip]]
+route = "/geoip/..."
+component = "geoip"
+
 ################################################################################
 # Componenet
 ################################################################################
@@ -147,6 +151,9 @@ allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 [component.webfinger]
 source = "wasm/webfinger.wasm"
 
+[componenet.geoip]
+source = "wasm/geoip.wasm"
+files = [{ source = "resource", destination = "/" }]
 
 ################################################################################
 # Variables
@@ -171,5 +178,3 @@ google_location_api_key = "{{ mstd_random_cafe_google_location_api_key }}"
 google_ai_api_key = "{{ google_ai_api_key }}"
 google_ai_api_uri = "{{ image_description_google_ai_api_uri }}"
 google_ai_prompt =  "{{ image_description_google_ai_prompt }}"
-
-

@@ -93,6 +93,10 @@ route = "/edge/grain/..."
 component = "hello-grain"
 executor = { type = "wagi" }
 
+[[trigger.http]]
+route = "/geoip/..."
+component = "geoip"
+
 ################################################################################
 # Componenet
 ################################################################################
@@ -156,6 +160,10 @@ source = "wasm/webfinger.wasm"
 [component.hello-grain]
 source = "wasm/hello_grain.wasm"
 
+[component.geoip]
+source = "wasm/geoip.wasm"
+files = [{ source = "resource", destination = "/" }]
+
 ################################################################################
 # Variables
 ################################################################################
@@ -212,3 +220,6 @@ command = "just build webfinger"
 
 [component.hello-grain.build]
 command = "cd apps/hello-grain; grain compile ./src/main.gr -o ../../wasm/hello_grain.wasm; chmod +x ../../wasm/hello_grain.wasm"
+
+[component.geoip.build]
+command = "just build geoip"
