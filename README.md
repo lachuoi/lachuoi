@@ -1,5 +1,5 @@
 # LACHUOI  
-Group of very microservices written in WebAssembly (Wasm) using the Spin framework.
+Group of very microservices with WebAssembly (Wasm) using the Spin framework.  
 
 Required for build
 - [Spin from Spinframework](https://github.com/spinframework/spin)
