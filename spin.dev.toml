@@ -138,6 +138,7 @@ allowed_outbound_hosts = ["https://geoname-seungjin.turso.io"]
 
 [component.ifconfig]
 source = "wasm/ifconfig.wasm"
+allowed_outbound_hosts = ["http://localhost:3000"]
 
 [component.newspenguin-rss]
 source = "wasm/newspenguin_rss.wasm"
