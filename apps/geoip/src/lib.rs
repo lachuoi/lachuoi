@@ -20,7 +20,7 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
         let message = format!("USAGE: {}?8.8.8.8", req.path());
         return Ok(Response::builder()
             .status(200)
-            .header("content-type", "plain/text")
+            .header("content-type", "text/plain")
             .body(message)
             .build());
     }
