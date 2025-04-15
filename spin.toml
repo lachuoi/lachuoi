@@ -87,7 +87,7 @@ component = "image-description"
 route = ".wellknown/webfinger"
 component = "webfinger"
 
-[[trigger.geoip]]
+[[trigger.http]]
 route = "/geoip/..."
 component = "geoip"
 
@@ -151,7 +151,7 @@ allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 [component.webfinger]
 source = "wasm/webfinger.wasm"
 
-[componenet.geoip]
+[component.geoip]
 source = "wasm/geoip.wasm"
 files = [{ source = "resource/geoip", destination = "/" }]
 
