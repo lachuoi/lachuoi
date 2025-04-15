@@ -53,8 +53,8 @@ route = "/random-place/..."
 component = "random-place"
 
 [[trigger.http]]
-route = "/ipconfig/..."
-component = "ipconfig"
+route = "/ifconfig/..."
+component = "ifconfig"
 
 [[trigger.cron]]
 component = "newspenguin-rss"
@@ -132,8 +132,8 @@ key_value_stores = ["mem"]
 sqlite_databases = ["geoname", "mem"]
 allowed_outbound_hosts = ["https://geoname-seungjin.turso.io"]
 
-[component.ipconfig]
-source = "wasm/ipconfig.wasm"
+[component.ifconfig]
+source = "wasm/ifconfig.wasm"
 
 [component.newspenguin-rss]
 source = "wasm/newspenguin_rss.wasm"
@@ -196,8 +196,8 @@ command = "just build mstd-random-cafe"
 [component.random-place.build]
 command = "just build random-place"
 
-[component.ipconfig.build]
-command = "just build ipconfig"
+[component.ifconfig.build]
+command = "just build ifconfig"
 
 [component.newspenguin-rss.build]
 command = "just build newspenguin-rss"

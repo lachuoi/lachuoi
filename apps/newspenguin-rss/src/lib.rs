@@ -210,11 +210,11 @@ fn check_process_lock() -> anyhow::Result<Option<()>> {
         DateTime::<Utc>::from_naive_utc_and_offset(naive_dt, Utc);
 
     let now = Utc::now();
-    let one_hour_ago = now - Duration::minutes(15);
+    let one_hour_ago = now - Duration::minutes(5);
 
     if utc_dt < one_hour_ago {
-        println!("Newspenguin lock process is older than 15 min. unlock it.");
-        process_unlock()?; // Unlock process that is older than 15 min.
+        println!("Newspenguin lock process is older than 5 min. unlock it.");
+        process_unlock()?; // Unlock process that is older than 5 min.
         return Ok(None);
     };
 
