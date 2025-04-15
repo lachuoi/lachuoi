@@ -153,7 +153,7 @@ source = "wasm/webfinger.wasm"
 
 [componenet.geoip]
 source = "wasm/geoip.wasm"
-files = [{ source = "resource", destination = "/" }]
+files = [{ source = "resource/geoip", destination = "/" }]
 
 ################################################################################
 # Variables

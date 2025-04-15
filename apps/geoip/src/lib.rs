@@ -6,6 +6,7 @@ use spin_sdk::{
 };
 use std::env;
 use std::net::IpAddr;
+use std::str::FromStr;
 
 /// A simple Spin HTTP component.
 #[http_component]
@@ -13,14 +14,26 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
     let reader =
         maxminddb::Reader::open_readfile("GeoLite2-City.mmdb").unwrap();
 
-    let arg = "130.162.154.1";
-    let ip: IpAddr = arg.parse().unwrap();
+    let query = req.query();
+    let ip = match IpAddr::from_str(query) {
+        Ok(ip) => ip,
+        Err(_) => {
+            return Ok(Response::builder()
+                .status(406)
+                .header("content-type", "text/plain")
+                .body("Not valid query")
+                .build());
+        }
+    };
     let city: Option<geoip2::City> = reader.lookup(ip).unwrap();
-    println!("{city:#?}");
+    let geoip_info = match city {
+        Some(x) => serde_json::to_string(&x).unwrap(),
+        None => "{}".to_string(),
+    };
 
     Ok(Response::builder()
         .status(200)
-        .header("content-type", "text/plain")
-        .body("Hello World!")
+        .header("content-type", "application/json")
+        .body(geoip_info)
         .build())
 }

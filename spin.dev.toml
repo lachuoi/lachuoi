@@ -88,6 +88,7 @@ component = "image-description"
 route = ".wellknown/webfinger"
 component = "webfinger"
 
+# Grain compile takes too long
 [[trigger.http]]
 route = "/edge/grain/..."
 component = "hello-grain"
@@ -162,7 +163,7 @@ source = "wasm/hello_grain.wasm"
 
 [component.geoip]
 source = "wasm/geoip.wasm"
-files = [{ source = "resource", destination = "/" }]
+files = [{ source = "resource/geoip", destination = "/" }]
 
 ################################################################################
 # Variables
@@ -218,8 +219,9 @@ command = "just build webfinger"
 # [component.logger.build]
 # command = "just build logger"
 
-[component.hello-grain.build]
-command = "cd apps/hello-grain; grain compile ./src/main.gr -o ../../wasm/hello_grain.wasm; chmod +x ../../wasm/hello_grain.wasm"
+# Grain compile takes too long
+# [component.hello-grain.build]
+# command = "cd apps/hello-grain; grain compile ./src/main.gr -o ../../wasm/hello_grain.wasm; chmod +x ../../wasm/hello_grain.wasm"
 
 [component.geoip.build]
 command = "just build geoip"
