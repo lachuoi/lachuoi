@@ -17,7 +17,7 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
     let query = req.query();
 
     if query.is_empty() {
-        let message = format!("USAGE: {}?8.8.8.8", req.path());
+        let message = format!("USAGE: {}?156.33.241.5", req.path());
         return Ok(Response::builder()
             .status(200)
             .header("content-type", "text/plain")
