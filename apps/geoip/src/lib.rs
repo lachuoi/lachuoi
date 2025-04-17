@@ -1,10 +1,9 @@
 use anyhow::Result;
 use maxminddb::geoip2;
 use spin_sdk::{
-    http::{HeaderValue, IntoResponse, Request, Response, Router},
+    http::{HeaderValue, IntoResponse, Request, Response},
     http_component,
 };
-use std::env;
 use std::net::IpAddr;
 use std::str::FromStr;
 
