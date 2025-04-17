@@ -1,3 +1,9 @@
+[sqlite_database.mem]
+type = "spin"
+
+[key_value_store.mem]
+type = "spin"
+
 [sqlite_database.lachuoi]
 type = "libsql"
 url = "https://.turso.io"
