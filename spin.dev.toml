@@ -45,7 +45,6 @@ cron_expression = "20 20 */8 * * *"
 [[trigger.cron]]
 component = "mstd-random-cafe"
 cron_expression = "20 20 */8 * * *"
-#cron_expression = "*/10 * * * * *"
 
 [[trigger.http]]
 # route = { private = true }
@@ -58,7 +57,7 @@ component = "ifconfig"
 
 [[trigger.cron]]
 component = "newspenguin-rss"
-cron_expression = "*/50 * * * * *"
+cron_expression = "*/10 * * * * *"
 
 # [[trigger.http]]
 # route = "/image/upload/..."
@@ -88,11 +87,15 @@ component = "image-description"
 route = ".well-known/webfinger"
 component = "webfinger"
 
+# Grain compile takes too long
 [[trigger.http]]
 route = "/edge/grain/..."
 component = "hello-grain"
 executor = { type = "wagi" }
 
+[[trigger.http]]
+route = "/geoip/..."
+component = "geoip"
 
 ################################################################################
 # Componenet
@@ -134,6 +137,7 @@ allowed_outbound_hosts = ["https://geoname-seungjin.turso.io"]
 
 [component.ifconfig]
 source = "wasm/ifconfig.wasm"
+allowed_outbound_hosts = ["http://localhost:3000"]
 
 [component.newspenguin-rss]
 source = "wasm/newspenguin_rss.wasm"
@@ -156,6 +160,10 @@ source = "wasm/webfinger.wasm"
 
 [component.hello-grain]
 source = "wasm/hello_grain.wasm"
+
+[component.geoip]
+source = "wasm/geoip.wasm"
+files = [{ source = "resource/geoip", destination = "/" }]
 
 ################################################################################
 # Variables
@@ -211,5 +219,9 @@ command = "just build webfinger"
 # [component.logger.build]
 # command = "just build logger"
 
-[component.hello-grain.build]
-command = "cd apps/hello-grain; grain compile ./src/main.gr -o ../../wasm/hello_grain.wasm; chmod +x ../../wasm/hello_grain.wasm"
+# Grain compile takes too long
+# [component.hello-grain.build]
+# command = "cd apps/hello-grain; grain compile ./src/main.gr -o ../../wasm/hello_grain.wasm; chmod +x ../../wasm/hello_grain.wasm"
+
+[component.geoip.build]
+command = "just build geoip"

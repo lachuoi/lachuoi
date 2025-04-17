@@ -87,6 +87,10 @@ component = "image-description"
 route = ".well-known/webfinger"
 component = "webfinger"
 
+[[trigger.http]]
+route = "/geoip/..."
+component = "geoip"
+
 ################################################################################
 # Componenet
 ################################################################################
@@ -125,6 +129,7 @@ allowed_outbound_hosts = ["https://geoname-seungjin.turso.io"]
 
 [component.ifconfig]
 source = "wasm/ifconfig.wasm"
+allowed_outbound_hosts = ["http://localhost:3000"]
 
 [component.newspenguin-rss]
 source = "wasm/newspenguin_rss.wasm"
@@ -147,6 +152,9 @@ allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 [component.webfinger]
 source = "wasm/webfinger.wasm"
 
+[component.geoip]
+source = "wasm/geoip.wasm"
+files = [{ source = "resource/geoip", destination = "/" }]
 
 ################################################################################
 # Variables
@@ -171,5 +179,3 @@ google_location_api_key = "{{ mstd_random_cafe_google_location_api_key }}"
 google_ai_api_key = "{{ google_ai_api_key }}"
 google_ai_api_uri = "{{ image_description_google_ai_api_uri }}"
 google_ai_prompt =  "{{ image_description_google_ai_prompt }}"
-
-

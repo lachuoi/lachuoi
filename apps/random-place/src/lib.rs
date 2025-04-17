@@ -13,16 +13,23 @@ use spin_sdk::{
 #[http_component]
 async fn handle_root(req: Request) -> Result<impl IntoResponse> {
     let mut router = Router::new();
-    router.get_async("/random-place/weighted", weighted_random_location);
-    router.get_async(
+    router.get("/random-place/weighted", weighted_random_location);
+    router.get(
         "/random-place/weighted/population",
         weighted_random_location,
     );
-    router.any_async("/random-place", random_location);
+    router.any("/random-place", random_location);
     Ok(router.handle(req))
+    
+
+    // Ok(Response::builder()
+    //     .status(200)
+    //     .header("content-type", "plain/text")
+    //     .body("arsarsars")
+    //     .build())
 }
 
-async fn random_location(
+fn random_location(
     _req: Request,
     _params: Params,
 ) -> anyhow::Result<impl IntoResponse> {
@@ -43,7 +50,7 @@ async fn random_location(
 }
 
 const CACHEKEY: &str = "city-pop-pair";
-async fn weighted_random_location(
+fn weighted_random_location(
     _req: Request,
     _params: Params,
 ) -> Result<Response> {
