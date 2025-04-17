@@ -27,13 +27,19 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
         .unwrap_or(null_string_hv)
         .as_str()
         .unwrap();
+    let x_forwarded_for = req
+        .header("x-forwarded-for")
+        .unwrap_or(null_string_hv)
+        .as_str()
+        .unwrap();
 
     if query.is_empty() {
         let message = format!(
-            "USAGE: {}://{}{}?156.33.241.5",
+            "USAGE: {}://{}{}?{}",
             x_forwarded_proto,
             x_forwarded_host,
-            req.path()
+            req.path(),
+            x_forwarded_for
         );
         return Ok(Response::builder()
             .status(200)
