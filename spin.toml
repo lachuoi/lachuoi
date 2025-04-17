@@ -38,14 +38,6 @@ component = "root"
 route = "/static/..."
 component = "assets"
 
-[[trigger.cron]]
-component = "mstd-random-restaurant"
-cron_expression = "0 20 0,6,12,18 * * *"
-
-[[trigger.cron]]
-component = "mstd-random-cafe"
-cron_expression = "0 40 3,9,15,21 * * *"
-
 [[trigger.http]]
 route = "/random-place/..."
 # route = { private = true }
@@ -55,33 +47,9 @@ component = "random-place"
 route = "/ifconfig/..."
 component = "ifconfig"
 
-[[trigger.cron]]
-component = "newspenguin-rss"
-cron_expression = "0 */15 * * * *"
-
-# [[trigger.http]]
-# route = "/image/upload/..."
-# component = "image-upload"
-
 [[trigger.http]]
 route = "/image/description/..."
 component = "image-description"
-
-# [[trigger.cron]]
-# component = "wss-rss"
-# cron_expression = "15 * * * * *"
-
-# [[trigger.http]]
-# route = "/logger/..."
-# component = "logger"
-
-# [[trigger.http]]
-# route = "/cert_check/..."
-# componenet = "cert-check"
-
-# [[trigger.cron]]
-# component = "cert-checker"
-# cron_experssion = "0 0 * * * *"
 
 [[trigger.http]]
 route = ".well-known/webfinger"
@@ -90,6 +58,19 @@ component = "webfinger"
 [[trigger.http]]
 route = "/geoip/..."
 component = "geoip"
+
+[[trigger.cron]]
+component = "newspenguin-rss"
+cron_expression = "0 */15 * * * *"
+
+[[trigger.cron]]
+component = "mstd-random-restaurant"
+cron_expression = "0 20 0,6,12,18 * * *"
+
+[[trigger.cron]]
+component = "mstd-random-cafe"
+cron_expression = "0 40 3,9,15,21 * * *"
+
 
 ################################################################################
 # Componenet
@@ -142,9 +123,10 @@ allowed_outbound_hosts = ["https://www.newspenguin.com",
 source = "wasm/image_description.wasm"
 allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 
-# [component.wss-rss]
-# source = "wasm/wss_rss.wasm"
-# allowed_outbound_hosts = ["https://www.wsj.com", "https://feedpub-seungjin.turso.io"]
+[component.wsj-rss]
+source = "wasm/wsj_rss.wasm"
+sqlite_databases = ["lachuoi"]
+allowed_outbound_hosts = ["https://www.wsj.com"]
 
 # [component.logger]
 # source = "wasm/logger.wasm"

@@ -38,14 +38,6 @@ component = "root"
 route = "/static/..."
 component = "assets"
 
-[[trigger.cron]]
-component = "mstd-random-restaurant"
-cron_expression = "20 20 */8 * * *"
-
-[[trigger.cron]]
-component = "mstd-random-cafe"
-cron_expression = "20 20 */8 * * *"
-
 [[trigger.http]]
 # route = { private = true }
 route = "/random-place/..."
@@ -55,47 +47,43 @@ component = "random-place"
 route = "/ifconfig/..."
 component = "ifconfig"
 
-[[trigger.cron]]
-component = "newspenguin-rss"
-cron_expression = "*/10 * * * * *"
-
-# [[trigger.http]]
-# route = "/image/upload/..."
-# component = "image-upload"
-
 [[trigger.http]]
 route = "/image/description/..."
 component = "image-description"
 
-# [[trigger.cron]]
-# component = "wss-rss"
-# cron_expression = "15 * * * * *"
-
 # [[trigger.http]]
 # route = "/logger/..."
 # component = "logger"
-
-# [[trigger.http]]
-# route = "/cert_check/..."
-# componenet = "cert-check"
-
-# [[trigger.cron]]
-# component = "cert-checker"
-# cron_experssion = "0 0 * * * *"
 
 [[trigger.http]]
 route = ".well-known/webfinger"
 component = "webfinger"
 
 # Grain compile takes too long
-[[trigger.http]]
-route = "/edge/grain/..."
-component = "hello-grain"
-executor = { type = "wagi" }
+# [[trigger.http]]
+# route = "/edge/grain/..."
+# component = "hello-grain"
+# executor = { type = "wagi" }
 
 [[trigger.http]]
 route = "/geoip/..."
 component = "geoip"
+
+[[trigger.cron]]
+component = "newspenguin-rss"
+cron_expression = "1 1 * * * *"
+
+[[trigger.cron]]
+component = "mstd-random-restaurant"
+cron_expression = "20 20 */8 * * *"
+
+[[trigger.cron]]
+component = "mstd-random-cafe"
+cron_expression = "20 20 */8 * * *"
+
+[[trigger.cron]]
+component = "wsj-rss"
+cron_expression = "*/10 * * * * *"
 
 ################################################################################
 # Componenet
@@ -142,28 +130,29 @@ allowed_outbound_hosts = ["http://localhost:3000"]
 [component.newspenguin-rss]
 source = "wasm/newspenguin_rss.wasm"
 sqlite_databases = ["lachuoi"]
-allowed_outbound_hosts = ["https://www.newspenguin.com", "https://feedpub-seungjin.turso.io", "https://mstd.seungjin.net"]
+allowed_outbound_hosts = ["https://www.newspenguin.com",
+                          "https://mstd.seungjin.net"]
 
 [component.image-description]
 source = "wasm/image_description.wasm"
 allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 
-# [component.wss-rss]
-# source = "wasm/wss_rss.wasm"
-# allowed_outbound_hosts = ["https://www.wsj.com", "https://feedpub-seungjin.turso.io"]
-
-# [component.logger]
-# source = "wasm/logger.wasm"
+[component.wsj-rss]
+source = "wasm/wsj_rss.wasm"
+sqlite_databases = ["lachuoi"]
+allowed_outbound_hosts = ["https://www.wsj.com",
+                          "https://mstd.seungjin.net"]
 
 [component.webfinger]
 source = "wasm/webfinger.wasm"
 
-[component.hello-grain]
-source = "wasm/hello_grain.wasm"
+# [component.hello-grain]
+# source = "wasm/hello_grain.wasm"
 
 [component.geoip]
 source = "wasm/geoip.wasm"
 files = [{ source = "resource/geoip", destination = "/" }]
+
 
 ################################################################################
 # Variables
@@ -216,12 +205,10 @@ command = "just build image-description"
 [component.webfinger.build]
 command = "just build webfinger"
 
-# [component.logger.build]
-# command = "just build logger"
-
 # Grain compile takes too long
 # [component.hello-grain.build]
 # command = "cd apps/hello-grain; grain compile ./src/main.gr -o ../../wasm/hello_grain.wasm; chmod +x ../../wasm/hello_grain.wasm"
 
-[component.geoip.build]
-command = "just build geoip"
+[component.wsj-rss.build]
+command = "just build wsj-rss"
+
