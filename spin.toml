@@ -57,7 +57,7 @@ component = "ifconfig"
 
 [[trigger.cron]]
 component = "newspenguin-rss"
-cron_expression = "0 10 * * * *"
+cron_expression = "0 */15 * * * *"
 
 # [[trigger.http]]
 # route = "/image/upload/..."
