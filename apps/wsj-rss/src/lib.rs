@@ -1,5 +1,6 @@
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
 use rss::{Channel, Item};
+use serde_json::{json, Value};
 use spin_cron_sdk::{cron_component, Metadata};
 use spin_sdk::{
     http::{Method::Get, Method::Post, Request, Response},
@@ -8,62 +9,86 @@ use spin_sdk::{
 };
 use std::str::{self};
 
-#[derive(Debug, Default)]
-struct WsjRssFeed {
-    name: String,
-    url: String,
-}
-
 #[cron_component]
 async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
     println!("WSJ RSS starting");
 
-    let wsj_rss_feeds: Vec<WsjRssFeed> = vec![
-        WsjRssFeed {
-            name: String::from("Opinion"),
-            url: String::from("https://feeds.content.dowjones.io/public/rss/RSSOpinion"),
+    let wsj_rss_feeds: Value = json![[
+        {
+            "name": "Opinion",
+            "url": "https://feeds.content.dowjones.io/public/rss/RSSOpinion"
         },
-        WsjRssFeed {
-            name: String::from("World News"),
-            url: String::from("https://feeds.content.dowjones.io/public/rss/RSSWorldNews")
+        {
+            "name": "World News",
+            "url": "https://feeds.content.dowjones.io/public/rss/RSSWorldNews"
         },
-        WsjRssFeed {
-            name: String::from("US Business"),
-            url: String::from("https://feeds.content.dowjones.io/public/rss/WSJcomUSBusiness")
+        {
+            "name": "US Business",
+            "url": "https://feeds.content.dowjones.io/public/rss/WSJcomUSBusiness"
         },
-        WsjRssFeed {
-            name: String::from("Market News"),
-            url: String::from("https://feeds.content.dowjones.io/public/rss/RSSMarketsMain")
+        {
+            "name": "Market News",
+            "url": "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain"
         },
-        WsjRssFeed {
-            name: String::from("Technology"),
-            url: String::from("https://feeds.content.dowjones.io/public/rss/RSSWSJD")
+        {
+            "name": "Technology",
+            "url": "https://feeds.content.dowjones.io/public/rss/RSSWSJD"
         },
-        WsjRssFeed {
-            name: String::from("Lifestyle"),
-            url: String::from("https://feeds.content.dowjones.io/public/rss/RSSLifestyle")
+        {
+            "name": "Lifestyle",
+            "url": "https://feeds.content.dowjones.io/public/rss/RSSLifestyle"
         },
-        WsjRssFeed {
-            name: String::from("US"),
-            url: String::from("https://feeds.content.dowjones.io/public/rss/RSSUSnews")
+        {
+            "name": "US",
+            "url": "https://feeds.content.dowjones.io/public/rss/RSSUSnews"
         },
-        WsjRssFeed { name: String::from("Politics"), url: String::from("https://feeds.content.dowjones.io/public/rss/socialpoliticsfeed")},
-        WsjRssFeed { name: String::from("Economy"), url: String::from("https://feeds.content.dowjones.io/public/rss/socialeconomyfeed")},
-        WsjRssFeed { name: String::from("Arts"), url: String::from("https://feeds.content.dowjones.io/public/rss/RSSArtsCulture")},
-        WsjRssFeed { name: String::from("Real Estate"), url: String::from("https://feeds.content.dowjones.io/public/rss/latestnewsrealestate")},
-        WsjRssFeed { name: String::from("Personal Finance"), url: String::from("https://feeds.content.dowjones.io/public/rss/RSSPersonalFinance")},
-        WsjRssFeed { name: String::from("Health"), url: String::from("https://feeds.content.dowjones.io/public/rss/socialhealth")},
-        WsjRssFeed { name: String::from("Style"), url: String::from("https://feeds.content.dowjones.io/public/rss/socialstyle")},
-        WsjRssFeed { name: String::from("Sports"), url: String::from("https://feeds.content.dowjones.io/public/rss/socialhealth")},
-    ];
+        {
+            "name": "Politics",
+            "url": "https://feeds.content.dowjones.io/public/rss/socialpoliticsfeed"
+        },
+        {
+            "name": "Economy",
+            "url": "https://feeds.content.dowjones.io/public/rss/socialeconomyfeed"
+        },
+        {
+            "name": "Arts",
+            "url": "https://feeds.content.dowjones.io/public/rss/RSSArtsCulture"
+        },
+        {
+            "name": "Real Estate",
+            "url": "https://feeds.content.dowjones.io/public/rss/latestnewsrealestat"
+        },
+        {
+            "name": "Personal Finance",
+            "url": "https://feeds.content.dowjones.io/public/rss/RSSPersonalFinance"
+        },
+        {
+            "name": "Health",
+            "url": "https://feeds.content.dowjones.io/public/rss/socialhealth"
+        },
+        {
+            "name": "Style",
+            "url": "https://feeds.content.dowjones.io/public/rss/socialstyle"
+        },
+        {
+            "name": "Sports",
+            "url": "https://feeds.content.dowjones.io/public/rss/socialhealth"
+        }
+    ]];
 
-    for wsj_rss_feed in wsj_rss_feeds {
-        println!("{:?}", wsj_rss_feed)
+    if let Some(feeds) = wsj_rss_feeds.as_array() {
+        for feed in feeds {
+            // Extract the "name" and "url" from each feed
+            if let (Some(name), Some(url)) = (
+                feed.get("name").and_then(Value::as_str),
+                feed.get("url").and_then(Value::as_str),
+            ) {
+                println!("Feed Name: {}, URL: {}", name, url);
+            }
+        }
     }
 
     return Ok(());
-
-
 
     if check_process_lock().unwrap().is_some() {
         println!("WSJ process lock exist - exit");
@@ -106,10 +131,6 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
 
 const DB_KEY_LAST_BUILD: &str = "newspenguin-rss.last_build_date";
 const DB_KEY_LOCK: &str = "newspenguin-rss.lock";
-
-
-
-
 
 async fn get_rss() -> anyhow::Result<Channel> {
     let rss_uri = variables::get("rss_uri").unwrap();
