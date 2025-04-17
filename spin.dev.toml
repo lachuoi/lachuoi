@@ -45,7 +45,6 @@ cron_expression = "20 20 */8 * * *"
 [[trigger.cron]]
 component = "mstd-random-cafe"
 cron_expression = "20 20 */8 * * *"
-#cron_expression = "*/10 * * * * *"
 
 [[trigger.http]]
 # route = { private = true }
@@ -58,7 +57,7 @@ component = "ifconfig"
 
 [[trigger.cron]]
 component = "newspenguin-rss"
-cron_expression = "*/50 * * * * *"
+cron_expression = "*/10 * * * * *"
 
 # [[trigger.http]]
 # route = "/image/upload/..."
