@@ -1,7 +1,7 @@
 use anyhow::Result;
 use maxminddb::geoip2;
 use spin_sdk::{
-    http::{IntoResponse, Params, Request, Response, Router},
+    http::{HeaderValue, IntoResponse, Request, Response, Router},
     http_component,
 };
 use std::env;
@@ -16,8 +16,25 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
 
     let query = req.query();
 
+    let null_string_hv = &HeaderValue::string("".to_string());
+    let x_forwarded_host = req
+        .header("x-forwarded-host")
+        .unwrap_or(null_string_hv)
+        .as_str()
+        .unwrap();
+    let x_forwarded_proto = req
+        .header("x-forwarded-proto")
+        .unwrap_or(null_string_hv)
+        .as_str()
+        .unwrap();
+
     if query.is_empty() {
-        let message = format!("USAGE: {}?156.33.241.5", req.path());
+        let message = format!(
+            "USAGE: {}://{}{}?156.33.241.5",
+            x_forwarded_proto,
+            x_forwarded_host,
+            req.path()
+        );
         return Ok(Response::builder()
             .status(200)
             .header("content-type", "text/plain")
