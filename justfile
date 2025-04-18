@@ -12,7 +12,11 @@ build app :
             cd $app
             spin build || exit
             set WASM_FILE (echo $app | tr '-' '_')
-            cp target/wasm32-wasip1/release/$WASM_FILE.wasm ../../wasm/
+            if test -e Cargo.toml
+              cp target/wasm32-wasip1/release/$WASM_FILE.wasm ../../wasm/
+            else
+              cp $WASM_FILE.wasm ../../wasm/
+            end
             cd ..
         end
         printf "#%.0s" (seq 80)
@@ -24,7 +28,7 @@ build app :
         cd apps/{{app}}
         spin build || exit
         set WASM_FILE (echo "{{app}}" | tr '-' '_')
-        cp target/wasm32-wasip1/release/$WASM_FILE.wasm ../../wasm/
+        cp target/wasm32-wasip1/release/app.wasm ../../wasm/$WASM_FILE.wasm
         printf "#%.0s" (seq 80)
         echo
         ;;

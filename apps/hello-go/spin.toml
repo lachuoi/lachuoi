@@ -14,5 +14,5 @@ source = "main.wasm"
 allowed_outbound_hosts = [ "https://random-data-api.fermyon.app" ]
 
 [component.hello-go.build]
-command = "tinygo build -target=wasip1 -gc=leaking -buildmode=c-shared -no-debug -o main.wasm ."
+command = "tinygo build -target=wasip1 -gc=leaking -buildmode=c-shared -no-debug -o app.wasm ."
 
