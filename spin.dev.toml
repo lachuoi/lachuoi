@@ -69,6 +69,10 @@ component = "webfinger"
 route = "/geoip/..."
 component = "geoip"
 
+[[trigger.http]]
+route = "/ap/user"
+component = "ap-user"
+
 [[trigger.cron]]
 component = "newspenguin-rss"
 cron_expression = "1 1 * * * *"
@@ -83,7 +87,7 @@ cron_expression = "20 20 */8 * * *"
 
 [[trigger.cron]]
 component = "wsj-rss"
-cron_expression = "*/10 * * * * *"
+cron_expression = "0 0 * * * *"
 
 ################################################################################
 # Componenet
@@ -145,6 +149,7 @@ allowed_outbound_hosts = ["https://www.wsj.com",
 
 [component.webfinger]
 source = "wasm/webfinger.wasm"
+sqlite_databases = ["lachuoi"]
 
 # [component.hello-grain]
 # source = "wasm/hello_grain.wasm"
@@ -153,6 +158,9 @@ source = "wasm/webfinger.wasm"
 source = "wasm/geoip.wasm"
 files = [{ source = "resource/geoip", destination = "/" }]
 
+[component.ap-user]
+source = "wasm/ap_user.wasm"
+sqlite_databases = ["lachuoi"]
 
 ################################################################################
 # Variables
@@ -212,3 +220,5 @@ command = "just build webfinger"
 [component.wsj-rss.build]
 command = "just build wsj-rss"
 
+[component.ap-user.build]
+command = "just build ap-user"

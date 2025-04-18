@@ -4,7 +4,7 @@ spin_manifest_version = 2
 name = "newspenguin-rss"
 version = "0.1.0"
 authors = ["Seungjin Kim <seungjin@duck.com>"]
-description = "https://github.com/seungjin/lachuoi/apps/newspenguin-rss"
+description = "https://mstd.seungjin.net/@newspenguin"
 
 [variables]
 internal_key = { required = true }

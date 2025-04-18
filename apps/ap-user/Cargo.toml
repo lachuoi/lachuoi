@@ -1,5 +1,5 @@
 [package]
-name = "image-upload"
+name = "ap-user"
 authors = ["Seungjin Kim <seungjin@duck.com>"]
 description = ""
 version = "0.1.0"
@@ -17,6 +17,7 @@ bytes = "1"
 http = "0.2"
 # The Spin SDK.
 spin-sdk = { git = "https://github.com/spinframework/spin-rust-sdk" }
+url = "2.5.4"
 
 
 [workspace]

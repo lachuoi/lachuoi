@@ -59,6 +59,10 @@ component = "webfinger"
 route = "/geoip/..."
 component = "geoip"
 
+[[trigger.http]]
+route = "/ap/user/..."
+component = "ap-user"
+
 [[trigger.cron]]
 component = "newspenguin-rss"
 cron_expression = "0 */15 * * * *"
@@ -137,6 +141,11 @@ source = "wasm/webfinger.wasm"
 [component.geoip]
 source = "wasm/geoip.wasm"
 files = [{ source = "resource/geoip", destination = "/" }]
+
+[component.ap-user]
+source = "wasm/ap_user.wasm"
+sqlite_databases = ["lachuoi"]
+
 
 ################################################################################
 # Variables
