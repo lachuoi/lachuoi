@@ -37,7 +37,13 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
         }
     };
 
-    let row = rows.rows().last().unwrap();
+    let row = match rows.rows().last() {
+        None => {
+            return Ok(Response::builder().status(404).build());
+        }
+        Some(r) => r,
+    };
+
     let v = row.get::<&str>("value").unwrap();
 
     // println!("{:?}", v.to_string());
