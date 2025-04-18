@@ -1,0 +1,18 @@
+# spin.toml
+spin_manifest_version = 2
+
+[application]
+name = "hello-go"
+version = "1.0.0"
+
+[[trigger.http]]
+route = "/hello"
+component = "hello-go"
+
+[component.hello-go]
+source = "main.wasm"
+allowed_outbound_hosts = [ "https://random-data-api.fermyon.app" ]
+
+[component.hello-go.build]
+command = "tinygo build -target=wasip1 -gc=leaking -buildmode=c-shared -no-debug -o main.wasm ."
+
