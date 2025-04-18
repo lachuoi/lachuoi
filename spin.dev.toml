@@ -83,7 +83,7 @@ cron_expression = "20 20 */8 * * *"
 
 [[trigger.cron]]
 component = "wsj-rss"
-cron_expression = "*/10 * * * * *"
+cron_expression = "0 0 * * * *"
 
 ################################################################################
 # Componenet
@@ -145,6 +145,7 @@ allowed_outbound_hosts = ["https://www.wsj.com",
 
 [component.webfinger]
 source = "wasm/webfinger.wasm"
+sqlite_databases = ["lachuoi"]
 
 # [component.hello-grain]
 # source = "wasm/hello_grain.wasm"
