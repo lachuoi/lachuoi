@@ -87,7 +87,7 @@ cron_expression = "20 20 */8 * * *"
 
 [[trigger.cron]]
 component = "wsj-rss"
-cron_expression = "0 0 * * * *"
+cron_expression = "*/10 * * * * *"
 
 ################################################################################
 # Componenet
