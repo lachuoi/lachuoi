@@ -1,4 +1,6 @@
 use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use convert_case::{Case, Casing};
+use once_cell::sync::Lazy;
 use rss::{Channel, Item};
 use serde_json::{json, Value};
 use spin_cron_sdk::{cron_component, Metadata};
@@ -8,6 +10,13 @@ use spin_sdk::{
     variables,
 };
 use std::str::{self};
+use std::sync::Arc;
+use std::sync::Mutex;
+
+static DB_KEY_LAST_BUILD: Lazy<Arc<Mutex<Option<String>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(None)));
+static DB_KEY_LOCK: Lazy<Mutex<Option<String>>> =
+    Lazy::new(|| Mutex::new(None));
 
 #[cron_component]
 async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
@@ -83,10 +92,26 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
                 feed.get("name").and_then(Value::as_str),
                 feed.get("url").and_then(Value::as_str),
             ) {
-                println!("Feed Name: {}, URL: {}", name, url);
+                //println!("Feed Name: {}, URL: {}", name, url);
+                let a = format!("wsj-rss.{}.last_build_date", name)
+                    .to_case(Case::Camel);
+                let _b = format!("wsj-rss.{}.lock", name).to_case(Case::Camel);
+
+                let mut db_key_last_build = DB_KEY_LAST_BUILD.lock().unwrap();
+                *db_key_last_build = Some(a);
+
+                foo(name.to_string(), url.to_string()).await?;
             }
         }
     }
+
+    Ok(())
+}
+
+async fn foo(name: String, url: String) -> anyhow::Result<()> {
+    let db_key_last_build = DB_KEY_LAST_BUILD.lock().unwrap();
+
+    println!("{:?}", *db_key_last_build);
 
     return Ok(());
 
@@ -129,9 +154,6 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
     Ok(())
 }
 
-const DB_KEY_LAST_BUILD: &str = "newspenguin-rss.last_build_date";
-const DB_KEY_LOCK: &str = "newspenguin-rss.lock";
-
 async fn get_rss() -> anyhow::Result<Channel> {
     let rss_uri = variables::get("rss_uri").unwrap();
     let request = Request::builder().method(Get).uri(rss_uri).build();
@@ -151,7 +173,11 @@ async fn last_build_date() -> anyhow::Result<Option<NaiveDateTime>> {
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
 
-    let execute_params = [SqlValue::Text(DB_KEY_LAST_BUILD.to_string())];
+    let mut db_key_last_build_ = DB_KEY_LAST_BUILD.lock().unwrap();
+    let db_key_last_build = db_key_last_build_.take().unwrap();
+    println!("{}", db_key_last_build);
+
+    let execute_params = [SqlValue::Text(db_key_last_build)];
     let rowset = connection.execute(
         "SELECT value FROM kv_store WHERE key = ?",
         execute_params.as_slice(),
@@ -176,9 +202,14 @@ async fn last_build_date() -> anyhow::Result<Option<NaiveDateTime>> {
 async fn update_last_build_date(d: NaiveDateTime) -> anyhow::Result<()> {
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
+
+    let mut db_key_last_build_ = DB_KEY_LAST_BUILD.lock().unwrap();
+    let db_key_last_build = db_key_last_build_.take().unwrap();
+    println!("{}", db_key_last_build);
+
     let execute_params = [
         SqlValue::Text(d.to_string()),
-        SqlValue::Text(DB_KEY_LAST_BUILD.to_string()),
+        SqlValue::Text(db_key_last_build),
     ];
     let rowset = connection
         .execute(
@@ -267,7 +298,11 @@ fn check_process_lock() -> anyhow::Result<Option<()>> {
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
 
-    let execute_params = [SqlValue::Text(DB_KEY_LOCK.to_string())];
+    let mut db_key_last_build_ = DB_KEY_LAST_BUILD.lock().unwrap();
+    let db_key_last_build = db_key_last_build_.take().unwrap();
+    println!("{}", db_key_last_build);
+
+    let execute_params = [SqlValue::Text(db_key_last_build)];
     let rowset = connection.execute(
         "SELECT updated_at FROM kv_store WHERE key = ? ORDER BY updated_at DESC LIMIT 1",
         execute_params.as_slice(),
@@ -303,7 +338,12 @@ fn process_lock() -> anyhow::Result<()> {
     println!("Newspenguin process lock");
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
-    let execute_params = [SqlValue::Text(DB_KEY_LOCK.to_string())];
+
+    let mut db_key_last_build_ = DB_KEY_LAST_BUILD.lock().unwrap();
+    let db_key_last_build = db_key_last_build_.take().unwrap();
+    println!("{}", db_key_last_build);
+
+    let execute_params = [SqlValue::Text(db_key_last_build)];
     let rowset = connection.execute(
         "INSERT INTO kv_store (key,value) VALUES (?, NULL)",
         execute_params.as_slice(),
@@ -313,9 +353,14 @@ fn process_lock() -> anyhow::Result<()> {
 
 fn process_unlock() -> anyhow::Result<()> {
     println!("Newspenguin process unlock");
+
+    let mut db_key_last_build_ = DB_KEY_LAST_BUILD.lock().unwrap();
+    let db_key_last_build = db_key_last_build_.take().unwrap();
+    println!("{}", db_key_last_build);
+
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
-    let execute_params = [SqlValue::Text(DB_KEY_LOCK.to_string())];
+    let execute_params = [SqlValue::Text(db_key_last_build)];
     let rowset = connection.execute(
         "DELETE FROM kv_store WHERE key = ?",
         execute_params.as_slice(),
