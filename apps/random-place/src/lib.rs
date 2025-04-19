@@ -20,7 +20,6 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
     );
     router.any("/random-place", random_location);
     Ok(router.handle(req))
-    
 
     // Ok(Response::builder()
     //     .status(200)
@@ -50,12 +49,20 @@ fn random_location(
 }
 
 const CACHEKEY: &str = "city-pop-pair";
+
 fn weighted_random_location(
     _req: Request,
     _params: Params,
 ) -> Result<Response> {
     // https://docs.rs/rand/latest/rand/distr/weighted/struct.WeightedIndex.html
     let cache = Store::open("mem")?;
+
+    let weighted_factors = json!({
+        "country" : {
+            "DE": 3, "GB": 3, "FR": 3, "ES": 3, "IT": 3, "TW": 3, "TH": 3,
+            "VN": 2, "MX": 3, "PT": 3, "CN": 0, "IN": 0.7
+        }
+    });
 
     let a = match cache.get(CACHEKEY)? {
         Some(x) => {
@@ -68,14 +75,35 @@ fn weighted_random_location(
                 .expect("geoname libsql connection error");
             let execute_params = [SqlValue::Integer(50_000)];
             let rowset = connection.execute(
-                "SELECT rowid, population FROM cities15000 WHERE country IS NOT \"CN\" AND population >= ?",
+                "SELECT rowid, population, country FROM cities15000 WHERE population >= ?",
                 execute_params.as_slice(),
             );
             let rows = rowset.unwrap().rows;
-            let cities_population: Vec<(u64, u64)> = rows
-                .iter()
-                .map(|r| (r.get::<u64>(0).unwrap(), r.get::<u64>(1).unwrap()))
-                .collect();
+            // let cities_population: Vec<(u64, u64)> = rows
+            //     .iter()
+            //     .map(|r| (r.get::<u64>(0).unwrap(), r.get::<u64>(1).unwrap()))
+            //     .collect();
+
+            let weighted_country = weighted_factors.get("country").unwrap();
+            let mut cities_population: Vec<(i64, i64)> = Vec::new();
+            for row in rows.iter() {
+                if let Some(obj) = weighted_country.as_object() {
+                    for (key, val) in obj.iter() {
+                        if row.get::<&str>(3).unwrap() == key {
+                            cities_population.push((
+                                row.get(1).unwrap(),
+                                row.get::<i64>(2).unwrap()
+                                    * val.as_i64().unwrap(),
+                            ))
+                        } else {
+                            cities_population.push((
+                                row.get(1).unwrap(),
+                                row.get::<i64>(2).unwrap() * 3,
+                            ));
+                        }
+                    }
+                }
+            }
 
             let json_str = serde_json::to_string(&cities_population).unwrap();
 
