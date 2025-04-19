@@ -57,10 +57,11 @@ fn weighted_random_location(
     // https://docs.rs/rand/latest/rand/distr/weighted/struct.WeightedIndex.html
     let cache = Store::open("mem")?;
 
+    // TODO: receive this over param
     let weighted_factors = json!({
         "country" : {
             "DE": 3, "GB": 3, "FR": 3, "ES": 3, "IT": 3, "TW": 3, "TH": 3,
-            "VN": 2, "MX": 3, "PT": 3, "CN": 0, "IN": 0.7
+            "MX": 3, "PT": 3, "CN": 0, "IN": 0.5, "ID": 0.7, "PK": 0.7
         }
     });
 
@@ -85,21 +86,24 @@ fn weighted_random_location(
             //     .collect();
 
             let weighted_country = weighted_factors.get("country").unwrap();
-            let mut cities_population: Vec<(i64, i64)> = Vec::new();
-            for row in rows.iter() {
+            let mut cities_population: Vec<(i64, f64)> = Vec::new();
+            for row in rows {
+                let population =
+                    row.get::<i64>(1).map(|v| v as f64).unwrap_or_else(|| {
+                        panic!("Expected a float but found another type!");
+                    });
+
                 if let Some(obj) = weighted_country.as_object() {
                     for (key, val) in obj.iter() {
-                        if row.get::<&str>(3).unwrap() == key {
+                        let factor = val.as_f64().unwrap();
+                        if row.get::<&str>(2).unwrap() == key {
                             cities_population.push((
-                                row.get(1).unwrap(),
-                                row.get::<i64>(2).unwrap()
-                                    * val.as_i64().unwrap(),
+                                row.get(0).unwrap(),
+                                population * factor,
                             ))
                         } else {
-                            cities_population.push((
-                                row.get(1).unwrap(),
-                                row.get::<i64>(2).unwrap() * 3,
-                            ));
+                            cities_population
+                                .push((row.get(0).unwrap(), population));
                         }
                     }
                 }
@@ -113,7 +117,7 @@ fn weighted_random_location(
         }
     };
 
-    let data: Vec<(u64, u64)> = serde_json::from_str(a.as_str()).unwrap();
+    let data: Vec<(u64, f64)> = serde_json::from_str(a.as_str()).unwrap();
     let mut rng = rand::rng();
     let dist =
         WeightedIndex::new(data.iter().map(|item| item.1 as f64)).unwrap();
