@@ -20,12 +20,6 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
     );
     router.any("/random-place", random_location);
     Ok(router.handle(req))
-
-    // Ok(Response::builder()
-    //     .status(200)
-    //     .header("content-type", "plain/text")
-    //     .body("arsarsars")
-    //     .build())
 }
 
 fn random_location(
@@ -37,7 +31,7 @@ fn random_location(
 
     let execute_params = [SqlValue::Integer(50000)];
     let rowset = connection.execute(
-        "SELECT alternatenames, asciiname, country, elevation, fclass, latitude, longitude, moddate, name, population, timezone FROM cities15000 WHERE population >= ? ORDER BY RANDOM() LIMIT 1",
+        "SELECT geonameid, alternatenames, asciiname, country, elevation, fclass, latitude, longitude, moddate, name, population, timezone FROM cities15000 WHERE population >= ? ORDER BY RANDOM() LIMIT 1",
         execute_params.as_slice(),
     )?;
 
@@ -60,15 +54,16 @@ fn weighted_random_location(
     // TODO: receive this over param
     let weighted_factors = json!({
         "country" : {
-            "DE": 3, "GB": 3, "FR": 3, "ES": 3, "IT": 3, "TW": 3, "TH": 3,
-            "MX": 3, "PT": 3, "CN": 0, "IN": 0.5, "ID": 0.7, "PK": 0.7
-        }
+            "DE": 2.5, "GB": 2, "FR": 2.5, "ES": 2, "IT": 2.5, "TW": 1.5, "TH": 2,
+            "PT": 1.8, "CN": 0.0, "IN": 0.25, "ID": 0.5, "PK": 0.3
+        },
+        "city": {} // Not implemented
     });
 
     let a = match cache.get(CACHEKEY)? {
         Some(x) => {
             println!("Cache retrived");
-            String::from_utf8(x).unwrap()
+            x
         }
         None => {
             println!("Writing to cache");
@@ -76,7 +71,7 @@ fn weighted_random_location(
                 .expect("geoname libsql connection error");
             let execute_params = [SqlValue::Integer(50_000)];
             let rowset = connection.execute(
-                "SELECT rowid, population, country FROM cities15000 WHERE population >= ?",
+                "SELECT geonameid, population, country FROM cities15000 WHERE population >= ? ",
                 execute_params.as_slice(),
             );
             let rows = rowset.unwrap().rows;
@@ -86,50 +81,61 @@ fn weighted_random_location(
             //     .collect();
 
             let weighted_country = weighted_factors.get("country").unwrap();
-            let mut cities_population: Vec<(i64, f64)> = Vec::new();
+            let mut cities_points: Vec<(i64, f64)> = Vec::new();
             for row in rows {
-                let population =
-                    row.get::<i64>(1).map(|v| v as f64).unwrap_or_else(|| {
-                        panic!("Expected a float but found another type!");
-                    });
+                let population = row
+                    .get::<i64>(1)
+                    .map(|v| v as f64)
+                    .expect("Expected a float but found another type!");
 
                 if let Some(obj) = weighted_country.as_object() {
                     for (key, val) in obj.iter() {
                         let factor = val.as_f64().unwrap();
-                        if row.get::<&str>(2).unwrap() == key {
-                            cities_population.push((
-                                row.get(0).unwrap(),
-                                population * factor,
-                            ))
-                        } else {
-                            cities_population
-                                .push((row.get(0).unwrap(), population));
+                        let z1 = row.get::<&str>(2).unwrap().to_string();
+                        let z2 = key.to_owned();
+                        if z1 == z2 {
+                            let weighted_point = population * factor;
+                            cities_points.push((
+                                row.get::<i64>(0).unwrap(),
+                                weighted_point,
+                            ));
                         }
+                        // else {
+                        //     cities_points
+                        //         .push((row.get(0).unwrap(), population));
+                        // }
                     }
+                } else {
+                    cities_points.push((row.get(0).unwrap(), population));
                 }
             }
 
-            let json_str = serde_json::to_string(&cities_population).unwrap();
+            let json_str = serde_json::to_vec(&cities_points).unwrap();
 
             let cache = Store::open("mem")?;
-            cache.set(CACHEKEY, json_str.as_bytes())?;
+            cache.set(CACHEKEY, json_str.as_slice())?;
             json_str
         }
     };
 
-    let data: Vec<(u64, f64)> = serde_json::from_str(a.as_str()).unwrap();
+    let b = serde_json::from_slice::<Value>(&a).unwrap();
+
+    let data: Vec<(i64, f64)> = serde_json::from_value(b).unwrap();
+    let data2 = data.as_slice();
+    //let data = serde_json::to_string(&b).unwrap();
     let mut rng = rand::rng();
-    let dist =
-        WeightedIndex::new(data.iter().map(|item| item.1 as f64)).unwrap();
+    let dist = WeightedIndex::new(data2.iter().map(|item| item.1)).unwrap();
     let random_index = dist.sample(&mut rng);
 
-    let &(id, _value) = data.get(random_index).unwrap();
+    let id = data[random_index].0;
+    let value = data[random_index].1;
+    // println!("{} -- {} - {}", random_index, id, value);
 
     let connection =
         Connection::open("geoname").expect("geoname libsql connection error");
     let execute_params = [SqlValue::Integer(id as i64)];
     let rowset = connection.execute(
-        "SELECT alternatenames, asciiname, country, elevation, fclass, latitude, longitude, moddate, name, population, timezone FROM cities15000 WHERE rowid = ?",
+        "SELECT geonameid, alternatenames, asciiname, country, elevation, fclass, latitude, longitude, moddate, name, population, timezone FROM cities15000 WHERE geonameid = ?",
         execute_params.as_slice(),
     )?;
 
