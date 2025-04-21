@@ -1,7 +1,7 @@
 use anyhow::Result;
 use rand::distr::weighted::WeightedIndex;
 use rand::prelude::*;
-use serde_json::{json, Value};
+use serde_json::{json, Number, Value};
 use spin_sdk::{
     http::{IntoResponse, Params, Request, Response, Router},
     http_component,
@@ -53,11 +53,13 @@ fn weighted_random_location(
 
     // TODO: receive this over param
     let weighted_factors = json!({
+        "base_population" : 50000,
         "country" : {
+            "CN": 0, "KP": 0, // China and North Korea
             "DE": 2.5, "GB": 2, "FR": 2.5, "ES": 2, "IT": 2.5, "TW": 1.5, "TH": 2,
-            "PT": 1.8, "CN": 0.0, "IN": 0.25, "ID": 0.5, "PK": 0.3
+            "PT": 1.8, "IN": 0.25, "ID": 0.4, "PK": 0.4
         },
-        "city": {} // Not implemented
+        "city": { }
     });
 
     let a = match cache.get(CACHEKEY)? {
@@ -67,43 +69,57 @@ fn weighted_random_location(
         }
         None => {
             println!("Writing to cache");
+            let default_pop = &Value::Number(Number::from_i128(49999).unwrap());
+            let base_population = weighted_factors
+                .get("base_population")
+                .unwrap_or(default_pop);
+
             let connection = Connection::open("geoname")
                 .expect("geoname libsql connection error");
-            let execute_params = [SqlValue::Integer(50_000)];
+            let execute_params =
+                [SqlValue::Integer(base_population.as_i64().unwrap())];
             let rowset = connection.execute(
-                "SELECT geonameid, population, country FROM cities15000 WHERE population >= ? ",
+                "SELECT geonameid, population, country, asciiname FROM cities15000 WHERE population >= ? ",
                 execute_params.as_slice(),
             );
             let rows = rowset.unwrap().rows;
-            // let cities_population: Vec<(u64, u64)> = rows
-            //     .iter()
-            //     .map(|r| (r.get::<u64>(0).unwrap(), r.get::<u64>(1).unwrap()))
-            //     .collect();
 
-            let weighted_country = weighted_factors.get("country").unwrap();
             let mut cities_points: Vec<(i64, f64)> = Vec::new();
+            let weighted_countries = weighted_factors.get("country").unwrap();
+            let weighted_cities = weighted_factors.get("city").unwrap();
             for row in rows {
                 let population = row
                     .get::<i64>(1)
                     .map(|v| v as f64)
                     .expect("Expected a float but found another type!");
 
-                if let Some(obj) = weighted_country.as_object() {
+                // Weighted by Countries
+                if let Some(obj) = weighted_countries.as_object() {
                     for (key, val) in obj.iter() {
-                        let factor = val.as_f64().unwrap();
-                        let z1 = row.get::<&str>(2).unwrap().to_string();
-                        let z2 = key.to_owned();
-                        if z1 == z2 {
-                            let weighted_point = population * factor;
+                        if row.get::<&str>(2).unwrap() == key {
+                            let weighted_point =
+                                population * val.as_f64().unwrap();
                             cities_points.push((
                                 row.get::<i64>(0).unwrap(),
                                 weighted_point,
                             ));
                         }
-                        // else {
-                        //     cities_points
-                        //         .push((row.get(0).unwrap(), population));
-                        // }
+                    }
+                } else {
+                    cities_points.push((row.get(0).unwrap(), population));
+                }
+
+                // Weighted by Cities
+                if let Some(obj) = weighted_cities.as_object() {
+                    for (key, val) in obj.iter() {
+                        if row.get::<&str>(3).unwrap() == key {
+                            let weighted_point =
+                                population * val.as_f64().unwrap();
+                            cities_points.push((
+                                row.get::<i64>(0).unwrap(),
+                                weighted_point,
+                            ));
+                        }
                     }
                 } else {
                     cities_points.push((row.get(0).unwrap(), population));
