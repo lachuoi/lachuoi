@@ -1,28 +1,31 @@
 use anyhow::Result;
 use rand::distr::weighted::WeightedIndex;
 use rand::prelude::*;
+use serde_hjson;
 use serde_json::{json, Number, Value};
 use spin_sdk::{
-    http::{IntoResponse, Params, Request, Response, Router},
+    http::{IntoResponse, Params, Request, Response, Router, Method::Get},
     http_component,
     key_value::Store,
     sqlite::{Connection, QueryResult, Value as SqlValue},
 };
+use std::str;
 
 /// A simple Spin HTTP component.
+
 #[http_component]
 async fn handle_root(req: Request) -> Result<impl IntoResponse> {
     let mut router = Router::new();
-    router.get("/random-place/weighted", weighted_random_location);
-    router.get(
+    router.get_async("/random-place/weighted", weighted_random_location);
+    router.get_async(
         "/random-place/weighted/population",
         weighted_random_location,
     );
-    router.any("/random-place", random_location);
+    router.get_async("/random-place", random_location);
     Ok(router.handle(req))
 }
 
-fn random_location(
+async fn random_location(
     _req: Request,
     _params: Params,
 ) -> anyhow::Result<impl IntoResponse> {
@@ -44,29 +47,40 @@ fn random_location(
 
 const CACHEKEY: &str = "city-pop-pair";
 
-fn weighted_random_location(
+async fn weighted_random_location(
     _req: Request,
     _params: Params,
 ) -> Result<Response> {
     // https://docs.rs/rand/latest/rand/distr/weighted/struct.WeightedIndex.html
     let cache = Store::open("mem")?;
 
+    // Getting weighted factor
+    let request = Request::builder()
+        .method(Get)
+        .uri("https://raw.githubusercontent.com/seungjin/lachuoi/refs/heads/main/assets/random-place-wegith.hjson")
+        
+        .build();
+    let response: Response = spin_sdk::http::send(request).await?;
+    let response_body = str::from_utf8(response.body()).unwrap();
+
+    let weighted_factors: Value = serde_hjson::from_str(response_body).unwrap();
+
     // TODO: receive this over param
-    let weighted_factors = json!({
-        "base_population" : 50000,
-        "country" : {
-            // Filtering out. China and North Korea
-            "CN": 0, "KP": 0,
-            // Weighted more
-            "DE": 2.5, "GB": 2, "FR": 2.5, "ES": 2, "IT": 2.5, "TW": 1.5, "TH": 2,
-            "NL": 2, "PT": 1.8,
-            // Weighted less
-            "IN": 0.25, "ID": 0.4, "PK": 0.4
-        },
-        "city": {
-            "Bangkok": 0.8
-         }
-    });
+    // let weighted_factors = json!({
+    //     "base_population" : 50000,
+    //     "country" : {
+    //         // Filtering out. China and North Korea
+    //         "CN": 0, "KP": 0,
+    //         // Weighted more
+    //         "DE": 2.5, "GB": 2, "FR": 2.5, "ES": 2, "IT": 2.5, "TW": 1.5, "TH": 2,
+    //         "NL": 2, "PT": 1.8,
+    //         // Weighted less
+    //         "IN": 0.25, "ID": 0.4, "PK": 0.4
+    //     },
+    //     "city": {
+    //         "Bangkok": 0.8
+    //      }
+    // });
 
     let a = match cache.get(CACHEKEY)? {
         Some(x) => {
