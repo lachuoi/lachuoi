@@ -20,7 +20,8 @@
     "PK": 0.4
   },
   "city": {
-    # more like for test purpose. Bangkok is great place but very high population dencity though.
-    "Bangkok": 0.8
+    # some of those very high density cities
+    "Bangkok": 0.8,
+    "Jakarta": 0.8
   }
 }
