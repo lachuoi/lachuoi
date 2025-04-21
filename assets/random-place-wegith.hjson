@@ -1,3 +1,17 @@
+# This is the current weighted city/country chart. Some countries have much
+# larger populations than others. The bot selects cities where the population
+# is greater than the base_population and multiplies its population by the
+# given weighted factor. For example, India, the country with the largest
+# population as of 2025, will get a lower weight factor. As a result, we have
+# less chance of picking India (unless we mostly have cities in India). 
+#
+# If you have any favorite countries or cities,
+# ping me at https://mstd.seungjin.net/@seungjin.
+# You are more than welcome!
+#
+# you can find 2letter country code here https://www.iban.com/country-codes
+#
+
 {
   "base_population" : 50000,
   "country" : {
