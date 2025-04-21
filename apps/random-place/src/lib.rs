@@ -55,11 +55,17 @@ fn weighted_random_location(
     let weighted_factors = json!({
         "base_population" : 50000,
         "country" : {
-            "CN": 0, "KP": 0, // China and North Korea
+            // Filtering out. China and North Korea
+            "CN": 0, "KP": 0,
+            // Weighted more
             "DE": 2.5, "GB": 2, "FR": 2.5, "ES": 2, "IT": 2.5, "TW": 1.5, "TH": 2,
-            "PT": 1.8, "IN": 0.25, "ID": 0.4, "PK": 0.4
+            "NL": 2, "PT": 1.8,
+            // Weighted less
+            "IN": 0.25, "ID": 0.4, "PK": 0.4
         },
-        "city": { }
+        "city": {
+            "Bangkok": 0.8
+         }
     });
 
     let a = match cache.get(CACHEKEY)? {

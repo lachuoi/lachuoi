@@ -1,0 +1,26 @@
+{
+  "base_population" : 50000,
+  "country" : {
+    # Filtering out some countries. China and North Korea
+    "CN": 0,
+    "KP": 0,
+    # Weight more
+    "DE": 2.5,
+    "ES": 2,
+    "FR": 2.5,
+    "GB": 2,
+    "IT": 2.5,
+    "NL": 2,
+    "PT": 1.8,
+    "TH": 2,
+    "TW": 1.5,
+    # Weighte less
+    "ID": 0.4,
+    "IN": 0.25,
+    "PK": 0.4
+  },
+  "city": {
+    # more like for test purpose. Bangkok is great place but very high population dencity though.
+    "Bangkok": 0.8
+  }
+}
