@@ -15,7 +15,8 @@
 {
   "base_population" : 50000,
   "country" : {
-    # Filtering out some countries. China, North Korea, Iran, Turkmenistan and Cuba
+    # Filtering out some countries. Location service not available there.
+    # China, North Korea, Iran, Turkmenistan and Cuba
     "CN": 0,
     "KP": 0,
     "IR": 0,
@@ -32,7 +33,6 @@
     "GR": 2,
     "IE": 1.5,
     "IT": 2.5,
-    "JP": 2,
     "KR": 2,
     "NL": 2,
     "PT": 1.8,
@@ -40,7 +40,7 @@
     "SE": 2,  
     "TH": 2,
     "TW": 1.5,
-    # Weighte less
+    # Weight less
     "ID": 0.4,
     "IN": 0.25,
     "PK": 0.4
