@@ -15,9 +15,12 @@
 {
   "base_population" : 50000,
   "country" : {
-    # Filtering out some countries. China and North Korea
+    # Filtering out some countries. China, North Korea, Iran, Turkmenistan and Cuba
     "CN": 0,
     "KP": 0,
+    "IR": 0,
+    "TM": 0,
+    "CU": 0,
     # Weight more
     "AT": 2,
     "BE": 2,
