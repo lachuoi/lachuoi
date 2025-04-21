@@ -110,7 +110,8 @@ sqlite_databases = ["lachuoi"]
 source = "wasm/random_place.wasm"
 key_value_stores = ["mem"]
 sqlite_databases = ["geoname", "mem"]
-allowed_outbound_hosts = ["https://geoname-seungjin.turso.io"]
+allowed_outbound_hosts = ["https://geoname-seungjin.turso.io",
+                          "https://raw.githubusercontent.com"]
 
 [component.ifconfig]
 source = "wasm/ifconfig.wasm"

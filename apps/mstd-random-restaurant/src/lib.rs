@@ -6,6 +6,7 @@ use spin_cron_sdk::{cron_component, Metadata};
 use spin_sdk::http::{Method::Get, Method::Post, Request, Response};
 use spin_sdk::variables;
 use std::str;
+use std::{thread, time};
 
 #[derive(Debug, Default)]
 struct Place {
@@ -377,6 +378,9 @@ async fn get_image_descriptions(place: &mut Place) -> anyhow::Result<()> {
         let d2 = serde_json::from_str::<Value>(description).unwrap();
         let d3 = d2.get("description").unwrap().as_str().unwrap();
         photo.description = Some(d3.to_string());
+        // It is free service. Let's give some buffer.
+        let short_sec = time::Duration::from_millis(3 * 1000);
+        thread::sleep(short_sec);
     }
     Ok(())
 }
