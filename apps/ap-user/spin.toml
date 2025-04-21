@@ -14,6 +14,6 @@ component = "ap-user"
 source = "target/wasm32-wasip1/release/ap_user.wasm"
 allowed_outbound_hosts = []
 
-[component.root.build]
+[component.ap-user.build]
 command = "cargo build --target wasm32-wasip1 --release"
 watch = ["src/**/*.rs", "Cargo.toml"]
