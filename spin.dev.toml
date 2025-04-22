@@ -25,6 +25,8 @@ google_ai_api_key = { required = true }
 
 image_description_google_ai_api_uri = { required = true }
 image_description_google_ai_prompt = { required = true }
+wsj_mstd_api_uri = { required = true }
+wsj_mstd_access_token = { required = true }
 
 ################################################################################
 # Trigger
@@ -75,7 +77,7 @@ component = "ap-user"
 
 [[trigger.cron]]
 component = "newspenguin-rss"
-cron_expression = "1 1 * * * *"
+cron_expression = "1 */20 * * * *"
 
 [[trigger.cron]]
 component = "mstd-random-restaurant"
@@ -87,7 +89,8 @@ cron_expression = "20 20 */8 * * *"
 
 [[trigger.cron]]
 component = "wsj-rss"
-cron_expression = "*/10 * * * * *"
+cron_expression = "1 */2 * * * *"
+
 
 ################################################################################
 # Componenet
@@ -145,7 +148,7 @@ allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 [component.wsj-rss]
 source = "wasm/wsj_rss.wasm"
 sqlite_databases = ["lachuoi"]
-allowed_outbound_hosts = ["https://www.wsj.com",
+allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
                           "https://mstd.seungjin.net"]
 
 [component.webfinger]
@@ -185,6 +188,10 @@ google_location_api_key = "{{ mstd_random_cafe_google_location_api_key }}"
 google_ai_api_key = "{{ google_ai_api_key }}"
 google_ai_api_uri = "{{ image_description_google_ai_api_uri }}"
 google_ai_prompt =  "{{ image_description_google_ai_prompt }}"
+
+[component.wsj-rss.variables]
+mstd_api_uri = "{{ wsj_mstd_api_uri }}" 
+mstd_access_token = "{{ wsj_mstd_access_token }}"
 
 ################################################################################
 # Build
