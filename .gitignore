@@ -5,3 +5,4 @@ runtime-config.dev.toml
 .env
 *.mmdb
 resource/geoip/*.mmdb
+*.nogit

@@ -25,6 +25,8 @@ google_ai_api_key = { required = true }
 
 image_description_google_ai_api_uri = { required = true }
 image_description_google_ai_prompt = { required = true }
+wsj_mstd_api_uri = { required = true }
+wsj_mstd_access_token = { required = true }
 
 ################################################################################
 # Trigger
@@ -74,6 +76,10 @@ cron_expression = "0 20 0,6,12,18 * * *"
 [[trigger.cron]]
 component = "mstd-random-cafe"
 cron_expression = "0 40 3,9,15,21 * * *"
+
+[[trigger.cron]]
+component = "wsj-rss"
+cron_expression = "1 */20 * * * *"
 
 
 ################################################################################
@@ -131,10 +137,9 @@ allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 [component.wsj-rss]
 source = "wasm/wsj_rss.wasm"
 sqlite_databases = ["lachuoi"]
-allowed_outbound_hosts = ["https://www.wsj.com"]
-
-# [component.logger]
-# source = "wasm/logger.wasm"
+allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
+                          "https://mstd.seungjin.net",
+                          "https://raw.githubusercontent.com"]
 
 [component.webfinger]
 source = "wasm/webfinger.wasm"
@@ -171,3 +176,7 @@ google_location_api_key = "{{ mstd_random_cafe_google_location_api_key }}"
 google_ai_api_key = "{{ google_ai_api_key }}"
 google_ai_api_uri = "{{ image_description_google_ai_api_uri }}"
 google_ai_prompt =  "{{ image_description_google_ai_prompt }}"
+
+[component.wsj-rss.variables]
+mstd_api_uri = "{{ wsj_mstd_api_uri }}" 
+mstd_access_token = "{{ wsj_mstd_access_token }}"

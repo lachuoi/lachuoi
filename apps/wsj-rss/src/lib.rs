@@ -1,5 +1,7 @@
-use chrono::{DateTime, Duration, NaiveDateTime, Utc};
+use chrono::{self, DateTime, Duration, NaiveDateTime, Utc};
+use convert_case::{Case, Casing};
 use rss::{Channel, Item};
+use serde_hjson;
 use serde_json::{json, Value};
 use spin_cron_sdk::{cron_component, Metadata};
 use spin_sdk::{
@@ -13,68 +15,13 @@ use std::str::{self};
 async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
     println!("WSJ RSS starting");
 
-    let wsj_rss_feeds: Value = json![[
-        {
-            "name": "Opinion",
-            "url": "https://feeds.content.dowjones.io/public/rss/RSSOpinion"
-        },
-        {
-            "name": "World News",
-            "url": "https://feeds.content.dowjones.io/public/rss/RSSWorldNews"
-        },
-        {
-            "name": "US Business",
-            "url": "https://feeds.content.dowjones.io/public/rss/WSJcomUSBusiness"
-        },
-        {
-            "name": "Market News",
-            "url": "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain"
-        },
-        {
-            "name": "Technology",
-            "url": "https://feeds.content.dowjones.io/public/rss/RSSWSJD"
-        },
-        {
-            "name": "Lifestyle",
-            "url": "https://feeds.content.dowjones.io/public/rss/RSSLifestyle"
-        },
-        {
-            "name": "US",
-            "url": "https://feeds.content.dowjones.io/public/rss/RSSUSnews"
-        },
-        {
-            "name": "Politics",
-            "url": "https://feeds.content.dowjones.io/public/rss/socialpoliticsfeed"
-        },
-        {
-            "name": "Economy",
-            "url": "https://feeds.content.dowjones.io/public/rss/socialeconomyfeed"
-        },
-        {
-            "name": "Arts",
-            "url": "https://feeds.content.dowjones.io/public/rss/RSSArtsCulture"
-        },
-        {
-            "name": "Real Estate",
-            "url": "https://feeds.content.dowjones.io/public/rss/latestnewsrealestat"
-        },
-        {
-            "name": "Personal Finance",
-            "url": "https://feeds.content.dowjones.io/public/rss/RSSPersonalFinance"
-        },
-        {
-            "name": "Health",
-            "url": "https://feeds.content.dowjones.io/public/rss/socialhealth"
-        },
-        {
-            "name": "Style",
-            "url": "https://feeds.content.dowjones.io/public/rss/socialstyle"
-        },
-        {
-            "name": "Sports",
-            "url": "https://feeds.content.dowjones.io/public/rss/socialhealth"
-        }
-    ]];
+    let request = Request::builder()
+        .method(Get)
+        .uri("https://raw.githubusercontent.com/seungjin/lachuoi/refs/heads/main/assets/wsj-news-feeds.hjson")
+        .build();
+    let response: Response = spin_sdk::http::send(request).await?;
+    let response_body = str::from_utf8(response.body()).unwrap();
+    let wsj_rss_feeds: Value = serde_hjson::from_str(response_body).unwrap();
 
     if let Some(feeds) = wsj_rss_feeds.as_array() {
         for feed in feeds {
@@ -83,62 +30,59 @@ async fn handle_cron_event(_: Metadata) -> anyhow::Result<()> {
                 feed.get("name").and_then(Value::as_str),
                 feed.get("url").and_then(Value::as_str),
             ) {
-                println!("Feed Name: {}, URL: {}", name, url);
+                rss_eater(name.to_string(), url.to_string()).await?;
             }
         }
     }
 
-    return Ok(());
+    Ok(())
+}
 
-    if check_process_lock().unwrap().is_some() {
-        println!("WSJ process lock exist - exit");
+const DB_KEY_PREFIX: &str = "wsj-rss";
+
+async fn rss_eater(name: String, url: String) -> anyhow::Result<()> {
+    // let db_key_last_build = format!("{}.last_build_date", DB_KEY_PREFIX);
+
+    if check_process_lock(&name).await.unwrap().is_some() {
+        println!("WSJ {} process lock exist - exit", name);
         println!("WSJ RSS finished");
         return Ok(());
     }
 
-    process_lock()?;
+    process_lock(&name).await?;
 
-    let channel = get_rss().await.unwrap();
+    let channel = get_rss(url).await.expect("Error from get_rss()");
 
     let rss_last_build_date = NaiveDateTime::parse_from_str(
         channel.last_build_date().unwrap(),
-        "%Y-%m-%d %H:%M:%S",
+        "%a, %d %b %Y %H:%M:%S GMT",
     )
-    .expect("Newspenguin Failed to parse date");
+    .expect("WSJ Failed to parse date");
 
-    let recorded_last_build_date = last_build_date().await?;
+    let recorded_last_build_date =
+        last_build_date(&name, rss_last_build_date).await?;
 
-    if recorded_last_build_date.is_none() {
-        update_last_build_date(rss_last_build_date).await?;
-        return Ok(());
-    }
-
-    if rss_last_build_date > recorded_last_build_date.unwrap() {
+    if rss_last_build_date > recorded_last_build_date {
         let new_items =
-            get_new_items(channel, recorded_last_build_date.unwrap()).await?;
-        post_to_mastodon(new_items).await?;
-        update_last_build_date(rss_last_build_date).await?;
+            get_new_items(channel, recorded_last_build_date).await?;
+        post_to_mastodon(&name, new_items).await?;
+        update_last_build_date(&name, rss_last_build_date).await?;
     } else {
-        update_last_build_date(rss_last_build_date).await?;
+        update_last_build_date(&name, rss_last_build_date).await?;
     }
 
+    process_unlock(&name).await?;
     println!("Newspenguin RSS finished");
-
-    process_unlock()?;
 
     Ok(())
 }
 
-const DB_KEY_LAST_BUILD: &str = "newspenguin-rss.last_build_date";
-const DB_KEY_LOCK: &str = "newspenguin-rss.lock";
-
-async fn get_rss() -> anyhow::Result<Channel> {
-    let rss_uri = variables::get("rss_uri").unwrap();
-    let request = Request::builder().method(Get).uri(rss_uri).build();
+async fn get_rss(rss_uri: String) -> anyhow::Result<Channel> {
+    let request = Request::builder().method(Get).uri(&rss_uri).build();
     let response: Response = spin_sdk::http::send(request).await?;
 
     if response.status() != &200u16 {
-        println!("NOT 200");
+        println!("Getting `{}` from `{}`", response.status(), rss_uri);
     }
 
     let rss = str::from_utf8(response.body()).unwrap().as_bytes();
@@ -147,78 +91,83 @@ async fn get_rss() -> anyhow::Result<Channel> {
     Ok(channel)
 }
 
-async fn last_build_date() -> anyhow::Result<Option<NaiveDateTime>> {
+async fn last_build_date(
+    name: &String,
+    dt: NaiveDateTime,
+) -> anyhow::Result<NaiveDateTime> {
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
 
-    let execute_params = [SqlValue::Text(DB_KEY_LAST_BUILD.to_string())];
+    let camel_name = name.to_case(Case::Camel);
+    let db_key_last_build =
+        format!("{}.{}.last_build_date", DB_KEY_PREFIX, camel_name);
+
+    let execute_params = [SqlValue::Text(db_key_last_build)];
     let rowset = connection.execute(
         "SELECT value FROM kv_store WHERE key = ?",
         execute_params.as_slice(),
     )?;
 
-    if rowset.rows().count() == 0 {
-        return Ok(None);
-    }
-
     let a = rowset.rows.first().unwrap();
     match a.get::<&str>(0) {
         Some(a) => {
-            let naive_dt =
-                NaiveDateTime::parse_from_str(a, "%Y-%m-%d %H:%M:%S")
-                    .expect("Failed to parse date");
-            Ok(Some(naive_dt))
+            let dt = NaiveDateTime::parse_from_str(a, "%Y-%m-%d %H:%M:%S")
+                .expect("Failed to parse date");
+            Ok(dt)
         }
-        None => Ok(None),
+        None => {
+            let db_key_last_build =
+                format!("{}.{}.last_build_date", DB_KEY_PREFIX, camel_name);
+            let execute_params = [
+                SqlValue::Text(db_key_last_build),
+                SqlValue::Text(dt.to_string()),
+            ];
+            connection.execute(
+                "INSERT INTO kv_store(KEY, VALUE) VALUEs(?,?)",
+                execute_params.as_slice(),
+            )?;
+
+            Ok(dt)
+        }
     }
 }
 
-async fn update_last_build_date(d: NaiveDateTime) -> anyhow::Result<()> {
+async fn update_last_build_date(
+    name: &String,
+    d: NaiveDateTime,
+) -> anyhow::Result<()> {
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
+
+    let camel_name = name.to_case(Case::Camel);
+    let db_key_last_build =
+        format!("{}.{}.last_build_date", DB_KEY_PREFIX, camel_name);
+
     let execute_params = [
         SqlValue::Text(d.to_string()),
-        SqlValue::Text(DB_KEY_LAST_BUILD.to_string()),
+        SqlValue::Text(db_key_last_build),
     ];
-    let rowset = connection
+    let _rowset = connection
         .execute(
             "UPDATE kv_store SET value = ? WHERE key = ?",
             execute_params.as_slice(),
         )
         .unwrap();
 
-    // https://github.com/spinframework/spin/issues/3092
-    // if rowset.rows().count() == 0 {
-    //     let execute_params = [
-    //         SqlValue::Text(NAME.to_string()),
-    //         SqlValue::Text(d.to_string()),
-    //     ];
-    //     let rowset = connection.execute(
-    //         "INSERT INTO last_build_date (NAME, LAST_BUILD_DATE) VALUES (?,?)",
-    //         execute_params.as_slice(),
-    //     );
-    // }
-    // {
-    //     // DELETE FROM last_build_date WHERE rowid NOT IN ( SELECT MAX(rowid) FROM last_build_date WHERE name = "newspenguin");
-    //     let execute_params = [SqlValue::Text(NAME.to_string())];
-    //     let rowset = connection.execute("DELETE FROM last_build_date WHERE rowid NOT IN ( SELECT MAX(rowid) FROM last_build_date WHERE name = ?)", execute_params.as_slice());
-    // }
-
     Ok(())
 }
 
 async fn get_new_items(
     channel: Channel,
-    dt: NaiveDateTime,
+    recorded_last_build_date: NaiveDateTime,
 ) -> anyhow::Result<Vec<Item>> {
     let mut new_items: Vec<Item> = Vec::new();
     for item in channel.items() {
-        let item_pub_date = NaiveDateTime::parse_from_str(
-            item.pub_date().unwrap(),
-            "%Y-%m-%d %H:%M:%S",
-        )
-        .expect("Failed to parse date");
-        if dt < item_pub_date {
+        let a = item.pub_date().unwrap();
+        let item_pub_date =
+            NaiveDateTime::parse_from_str(a, "%a, %d %b %Y %H:%M:%S GMT")
+                .expect("Failed to parse date");
+        if recorded_last_build_date < item_pub_date {
             new_items.push(item.clone());
         }
     }
@@ -226,7 +175,10 @@ async fn get_new_items(
     Ok(new_items)
 }
 
-async fn post_to_mastodon(msgs: Vec<Item>) -> anyhow::Result<()> {
+async fn post_to_mastodon(
+    name: &String,
+    msgs: Vec<Item>,
+) -> anyhow::Result<()> {
     let mstd_api_uri = format!(
         "{}/api/v1/statuses",
         variables::get("mstd_api_uri").unwrap()
@@ -238,9 +190,11 @@ async fn post_to_mastodon(msgs: Vec<Item>) -> anyhow::Result<()> {
         return Ok(());
     }
 
+    println!("POST TO MASTODON");
     for item in msgs {
         let msg: String = format!(
-            "{}:\n{}\n{}\n({})",
+            "[{}] {}\n{}\n{}\n({})",
+            name,
             item.title.clone().unwrap(),
             item.description.unwrap(),
             item.link.unwrap(),
@@ -256,18 +210,21 @@ async fn post_to_mastodon(msgs: Vec<Item>) -> anyhow::Result<()> {
         let response: Response = spin_sdk::http::send(request).await?;
 
         if response.status().to_owned() == 200u16 {
-            println!("Rss published: [{}]", item.title.unwrap());
+            println!("WSJ-Rss published: {}", item.title.unwrap());
         }
     }
 
     Ok(())
 }
 
-fn check_process_lock() -> anyhow::Result<Option<()>> {
+async fn check_process_lock(name: &String) -> anyhow::Result<Option<()>> {
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
 
-    let execute_params = [SqlValue::Text(DB_KEY_LOCK.to_string())];
+    let camel_name = name.to_case(Case::Camel);
+    let db_key_last_build = format!("{}.{}.lock", DB_KEY_PREFIX, camel_name);
+
+    let execute_params = [SqlValue::Text(db_key_last_build)];
     let rowset = connection.execute(
         "SELECT updated_at FROM kv_store WHERE key = ? ORDER BY updated_at DESC LIMIT 1",
         execute_params.as_slice(),
@@ -292,30 +249,36 @@ fn check_process_lock() -> anyhow::Result<Option<()>> {
 
     if utc_dt < one_hour_ago {
         println!("Newspenguin lock process is older than 5 min. unlock it.");
-        process_unlock()?; // Unlock process that is older than 5 min.
+        process_unlock(name).await?; // Unlock process that is older than 5 min.
         return Ok(None);
     };
 
     Ok(Some(()))
 }
 
-fn process_lock() -> anyhow::Result<()> {
-    println!("Newspenguin process lock");
+async fn process_lock(name: &String) -> anyhow::Result<()> {
+    println!("Wsj-rss {} process lock", name);
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
-    let execute_params = [SqlValue::Text(DB_KEY_LOCK.to_string())];
-    let rowset = connection.execute(
+
+    let camel_name = name.to_case(Case::Camel);
+    let db_key_last_build = format!("{}.{}.lock", DB_KEY_PREFIX, camel_name);
+
+    let execute_params = [SqlValue::Text(db_key_last_build)];
+    let _rowset = connection.execute(
         "INSERT INTO kv_store (key,value) VALUES (?, NULL)",
         execute_params.as_slice(),
     )?;
     Ok(())
 }
 
-fn process_unlock() -> anyhow::Result<()> {
-    println!("Newspenguin process unlock");
+async fn process_unlock(name: &String) -> anyhow::Result<()> {
+    let camel_name = name.to_case(Case::Camel);
+    let db_key_last_build = format!("{}.{}.lock", DB_KEY_PREFIX, camel_name);
+
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
-    let execute_params = [SqlValue::Text(DB_KEY_LOCK.to_string())];
+    let execute_params = [SqlValue::Text(db_key_last_build)];
     let rowset = connection.execute(
         "DELETE FROM kv_store WHERE key = ?",
         execute_params.as_slice(),

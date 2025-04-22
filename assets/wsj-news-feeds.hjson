@@ -1,0 +1,63 @@
+# https://www.wsj.com/news/rss-news-and-feeds
+[
+  {
+    name: Opinion
+    url: https://feeds.content.dowjones.io/public/rss/RSSOpinion
+  }
+  {
+    name: World News
+    url: https://feeds.content.dowjones.io/public/rss/RSSWorldNews
+  }
+  {
+    name: US Business
+    url: https://feeds.content.dowjones.io/public/rss/WSJcomUSBusiness
+  }
+  {
+    name: Market News
+    url: https://feeds.content.dowjones.io/public/rss/RSSMarketsMain
+  }
+  {
+    name: Technology
+    url: https://feeds.content.dowjones.io/public/rss/RSSWSJD
+  }
+  {
+    name: Lifestyle
+    url: https://feeds.content.dowjones.io/public/rss/RSSLifestyle
+  }
+  {
+    name: US
+    url: https://feeds.content.dowjones.io/public/rss/RSSUSnews
+  }
+  {
+    name: Politics
+    url: https://feeds.content.dowjones.io/public/rss/socialpoliticsfeed
+  }
+  {
+    name: Economy
+    url: https://feeds.content.dowjones.io/public/rss/socialeconomyfeed
+  }
+  {
+    name: Arts
+    url: https://feeds.content.dowjones.io/public/rss/RSSArtsCulture
+  }
+  {
+    name: Real Estate
+    url: https://feeds.content.dowjones.io/public/rss/latestnewsrealestate
+  }
+  {
+    name: Personal Finance
+    url: https://feeds.content.dowjones.io/public/rss/RSSPersonalFinance
+  }
+  {
+    name: Health
+    url: https://feeds.content.dowjones.io/public/rss/socialhealth
+  }
+  {
+    name: Style
+    url: https://feeds.content.dowjones.io/public/rss/RSSStyle
+  }
+  {
+    name: Sports
+    url: https://feeds.content.dowjones.io/public/rss/rsssportsfeed
+  }
+]
