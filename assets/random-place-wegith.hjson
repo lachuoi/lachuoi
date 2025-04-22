@@ -28,8 +28,8 @@
     "CZ": 2,
     "DK": 2,
     "FI": 2,
-    "FR": 2.5,
-    "DE": 2.5,
+    "FR": 2.2,
+    "DE": 2.2,
     "GR": 2,
     "IE": 1.5,
     "IT": 2.5,
@@ -41,9 +41,9 @@
     "TH": 2,
     "TW": 1.5,
     # Weight less
-    "ID": 0.4,
-    "IN": 0.25,
-    "PK": 0.4
+    "ID": 0.3,
+    "IN": 0.15,
+    "PK": 0.3
   },
   "city": {
     # some of those very high density cities
