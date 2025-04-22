@@ -14,7 +14,7 @@ bytes = "1"
 spin-sdk = "3.1.0"
 spin-cron-sdk = { git = "https://github.com/spinframework/spin-trigger-cron" }
 serde_yaml = "0"
-rss = "2.0.12"
+rss = "2.0"
 chrono = "0.4.40"
 chrono-tz = "0.10.3"
 urlencoding = "2.1.3"
