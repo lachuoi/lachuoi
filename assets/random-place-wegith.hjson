@@ -41,9 +41,9 @@
     "TH": 2,
     "TW": 1.5,
     # Weight less
-    "ID": 0.4,
-    "IN": 0.25,
-    "PK": 0.4
+    "ID": 0.3,
+    "IN": 0.15,
+    "PK": 0.3
   },
   "city": {
     # some of those very high density cities
