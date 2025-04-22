@@ -1,8 +1,7 @@
 use chrono::{self, DateTime, Duration, NaiveDateTime, Utc};
 use convert_case::{Case, Casing};
 use rss::{Channel, Item};
-use serde_hjson;
-use serde_json::{json, Value};
+use serde_json::Value;
 use spin_cron_sdk::{cron_component, Metadata};
 use spin_sdk::{
     http::{Method::Get, Method::Post, Request, Response},
@@ -193,7 +192,7 @@ async fn post_to_mastodon(
     println!("POST TO MASTODON");
     for item in msgs {
         let msg: String = format!(
-            "[{}] {}\n{}\n{}\n({}) #wsj",
+            "[{}] {}\n{}\n{}\n({}) #WSJ",
             name,
             item.title.clone().unwrap(),
             item.description.unwrap(),
@@ -209,7 +208,7 @@ async fn post_to_mastodon(
             .build();
         let response: Response = spin_sdk::http::send(request).await?;
 
-        if response.status().to_owned() == 200u16 {
+        if response.status() == &200u16 {
             println!("WSJ-Rss published: {}", item.title.unwrap());
         }
     }
@@ -279,7 +278,7 @@ async fn process_unlock(name: &String) -> anyhow::Result<()> {
     let connection =
         Connection::open("lachuoi").expect("lachuoi db connection error");
     let execute_params = [SqlValue::Text(db_key_last_build)];
-    let rowset = connection.execute(
+    let _rowset = connection.execute(
         "DELETE FROM kv_store WHERE key = ?",
         execute_params.as_slice(),
     )?;
