@@ -192,7 +192,7 @@ async fn post_to_mastodon(
     println!("POST TO MASTODON");
     for item in msgs {
         let msg: String = format!(
-            "[{}] {}\n{}\n{}\n({}) #WSJ",
+            "[{}] {}\n{} #WSJ\n{}\n({})",
             name,
             item.title.clone().unwrap(),
             item.description.unwrap(),
