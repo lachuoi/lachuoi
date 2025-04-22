@@ -137,7 +137,9 @@ allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 [component.wsj-rss]
 source = "wasm/wsj_rss.wasm"
 sqlite_databases = ["lachuoi"]
-allowed_outbound_hosts = ["https://feeds.content.dowjones.io"]
+allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
+                          "https://mstd.seungjin.net",
+                          "https://raw.githubusercontent.com"]
 
 [component.webfinger]
 source = "wasm/webfinger.wasm"
