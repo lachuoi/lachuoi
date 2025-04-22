@@ -179,7 +179,6 @@ async fn post_to_mastodon(
     name: &String,
     msgs: Vec<Item>,
 ) -> anyhow::Result<()> {
-    println!("POST TO MASTODON");
     let mstd_api_uri = format!(
         "{}/api/v1/statuses",
         variables::get("mstd_api_uri").unwrap()
@@ -191,6 +190,7 @@ async fn post_to_mastodon(
         return Ok(());
     }
 
+    println!("POST TO MASTODON");
     for item in msgs {
         let msg: String = format!(
             "[{}] {}\n{}\n{}\n({})",
