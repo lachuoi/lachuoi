@@ -1,8 +1,8 @@
 [
-  {
-    name: The Converstarion - English
-    url: https://theconversation.com/articles.atom?language=en
-  }
+  //{
+  //  name: The Converstarion - English
+  //  url: https://theconversation.com/articles.atom?language=en
+  //}
   {
     name: MarketWatch.com - Top Stories
     url: https://feeds.content.dowjones.io/public/rss/mw_topstories
