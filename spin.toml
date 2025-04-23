@@ -124,7 +124,7 @@ sqlite_databases = ["lachuoi"]
 [component.random-place]
 source = "wasm/random_place.wasm"
 key_value_stores = ["mem"]
-sqlite_databases = ["geoname", "mem"]
+sqlite_databases = ["geoname"]
 allowed_outbound_hosts = ["https://geoname-seungjin.turso.io",
                           "https://raw.githubusercontent.com"]
 
@@ -174,7 +174,7 @@ allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
 ################################################################################
 [component.newspenguin-rss.variables]
 rss_uri = "{{ newspenguin_rss_uri }}"
-mstd_api_uri = "{{ newspenguin_mstd_api_uri     " 
+mstd_api_uri = "{{ newspenguin_mstd_api_uri }}" 
 mstd_access_token = "{{ newspenguin_mstd_access_token }}"
 
 [component.mstd-random-restaurant.variables]
@@ -187,7 +187,7 @@ mstd_access_token = "{{ mstd_random_cafe_mstd_access_token }}"
 mstd_api_uri = "{{ mstd_random_cafe_mstd_api_uri }}"
 google_location_api_key = "{{ mstd_random_cafe_google_location_api_key }}"
 
-[component.i10ge-description.variables]
+[component.image-description.variables]
 google_ai_api_key = "{{ google_ai_api_key }}"
 google_ai_api_uri = "{{ image_description_google_ai_api_uri }}"
 google_ai_prompt =  "{{ image_description_google_ai_prompt }}"
