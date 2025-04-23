@@ -94,7 +94,7 @@ cron_expression = "20 20 */8 * * *"
 
 [[trigger.cron]]
 component = "mstd-wsj-rss"
-cron_expression = "1 */2 * * * *"
+cron_expression = "1 1 * * * *"
 
 [[trigger.cron]]
 component = "mstd-servant"
@@ -180,7 +180,8 @@ source = "wasm/mstd_servant.wasm"
 sqlite_databases = ["lachuoi"]
 allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
                           "https://mstd.seungjin.net",
-                          "https://raw.githubusercontent.com"]
+                          "https://raw.githubusercontent.com",
+                          "https://theconversation.com"]
 
 
 ################################################################################

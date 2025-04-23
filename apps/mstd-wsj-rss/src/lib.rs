@@ -71,7 +71,7 @@ async fn rss_eater(name: String, url: String) -> anyhow::Result<()> {
     }
 
     process_unlock(&name).await?;
-    println!("Newspenguin RSS finished");
+    println!("Mstd-Wsj RSS finished");
 
     Ok(())
 }
@@ -107,14 +107,17 @@ async fn last_build_date(
         execute_params.as_slice(),
     )?;
 
-    let a = rowset.rows.first().unwrap();
-    match a.get::<&str>(0) {
-        Some(a) => {
-            let dt = NaiveDateTime::parse_from_str(a, "%Y-%m-%d %H:%M:%S")
-                .expect("Failed to parse date");
-            Ok(dt)
+    let a = rowset.rows;
+    match !a.is_empty() {
+        true => {
+            let stored_dt = NaiveDateTime::parse_from_str(
+                a.first().unwrap().get(0).unwrap(),
+                "%Y-%m-%d %H:%M:%S",
+            )
+            .expect("Failed to parse date");
+            Ok(stored_dt)
         }
-        None => {
+        false => {
             let db_key_last_build =
                 format!("{}.{}.last_build_date", DB_KEY_PREFIX, camel_name);
             let execute_params = [
@@ -185,7 +188,7 @@ async fn post_to_mastodon(
     let mstd_access_token = variables::get("mstd_access_token").unwrap();
 
     if msgs.is_empty() {
-        println!("Newspenguin RSS - Nothing to publish");
+        println!("Mstd-Wsj RSS - Nothing to publish");
         return Ok(());
     }
 
@@ -237,7 +240,7 @@ async fn check_process_lock(name: &String) -> anyhow::Result<Option<()>> {
 
     let naive_dt =
         NaiveDateTime::parse_from_str(updated_at, "%Y-%m-%d %H:%M:%S")
-            .expect("Newspenguin Failed to parse datetime");
+            .expect("Mstd-Wsj Failed to parse datetime");
 
     // Assume it's already in UTC (you can adjust here if it's in local time or another zone)
     let utc_dt: DateTime<Utc> =
@@ -247,7 +250,7 @@ async fn check_process_lock(name: &String) -> anyhow::Result<Option<()>> {
     let one_hour_ago = now - Duration::minutes(5);
 
     if utc_dt < one_hour_ago {
-        println!("Newspenguin lock process is older than 5 min. unlock it.");
+        println!("Mstd-Wsj lock process is older than 5 min. unlock it.");
         process_unlock(name).await?; // Unlock process that is older than 5 min.
         return Ok(None);
     };

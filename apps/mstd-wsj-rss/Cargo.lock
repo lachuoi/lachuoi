@@ -466,6 +466,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f232d6ef707e1956a43342693d2a31e72989554d58299d7a88738cc95b0d35c"
 
 [[package]]
+name = "mstd-wsj-rss"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "convert_case",
+ "rss",
+ "serde",
+ "serde-hjson",
+ "serde_json",
+ "serde_yaml",
+ "spin-cron-sdk",
+ "spin-sdk",
+ "urlencoding",
+]
+
+[[package]]
 name = "never"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1166,24 +1185,4 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "unicode-xid",
-]
-
-[[package]]
-name = "wsj-rss"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytes",
- "chrono",
- "chrono-tz",
- "convert_case",
- "once_cell",
- "rss",
- "serde",
- "serde-hjson",
- "serde_json",
- "serde_yaml",
- "spin-cron-sdk",
- "spin-sdk",
- "urlencoding",
 ]

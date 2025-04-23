@@ -107,14 +107,17 @@ async fn last_build_date(
         execute_params.as_slice(),
     )?;
 
-    let a = rowset.rows.first().unwrap();
-    match a.get::<&str>(0) {
-        Some(a) => {
-            let dt = NaiveDateTime::parse_from_str(a, "%Y-%m-%d %H:%M:%S")
-                .expect("Failed to parse date");
-            Ok(dt)
+    let a = rowset.rows;
+    match !a.is_empty() {
+        true => {
+            let stored_dt = NaiveDateTime::parse_from_str(
+                a.first().unwrap().get(0).unwrap(),
+                "%Y-%m-%d %H:%M:%S",
+            )
+            .expect("Failed to parse date");
+            Ok(stored_dt)
         }
-        None => {
+        false => {
             let db_key_last_build =
                 format!("{}.{}.last_build_date", DB_KEY_PREFIX, camel_name);
             let execute_params = [
