@@ -43,7 +43,7 @@
     # Weight less
     "ID": 0.3,
     "IN": 0.15,
-    "PK": 0.3
+    "PK": 0.2
   },
   "city": {
     # some of those very high density cities
