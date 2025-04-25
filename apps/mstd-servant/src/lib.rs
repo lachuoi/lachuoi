@@ -202,7 +202,7 @@ async fn post_to_mastodon(
             item.link.unwrap(),
             item.pub_date.unwrap()
         );
-        let form_body = format!("status={}&visibility={}", &msg, "public");
+        let form_body = format!("status={}&visibility={}", &msg, "unlisted");
         let request = Request::builder()
             .method(Post)
             .uri(&mstd_api_uri)
