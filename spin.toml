@@ -144,7 +144,7 @@ source = "wasm/image_description.wasm"
 allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 
 [component.mstd-wsj-rss]
-source = "wasm/wsj_rss.wasm"
+source = "wasm/mstd_wsj_rss.wasm"
 sqlite_databases = ["lachuoi"]
 allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
                           "https://mstd.seungjin.net",

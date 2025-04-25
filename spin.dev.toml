@@ -94,11 +94,11 @@ cron_expression = "20 20 */8 * * *"
 
 [[trigger.cron]]
 component = "mstd-wsj-rss"
-cron_expression = "1 1 * * * *"
+cron_expression = "*/10 * * * * *"
 
 [[trigger.cron]]
 component = "mstd-servant"
-cron_expression = "*/10 * * * * *"
+cron_expression = "1 1 * * * *"
 
 ################################################################################
 # Componenet
@@ -154,7 +154,7 @@ source = "wasm/image_description.wasm"
 allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 
 [component.mstd-wsj-rss]
-source = "wasm/wsj_rss.wasm"
+source = "wasm/mstd_wsj_rss.wasm"
 sqlite_databases = ["lachuoi"]
 allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
                           "https://mstd.seungjin.net",

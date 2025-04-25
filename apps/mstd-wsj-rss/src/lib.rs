@@ -192,6 +192,8 @@ async fn post_to_mastodon(
         return Ok(());
     }
 
+    println!("--->{:?}", msgs);
+
     println!("POST TO MASTODON");
     for item in msgs {
         let msg: String = format!(
