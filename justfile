@@ -3,7 +3,7 @@ build app :
   #!/usr/bin/env fish
   cd {{justfile_directory()}}
   switch "{{app}}"
-    case all
+    case --all
         cd apps
         for app in (ls -d -- */ | grep -v '^_')
             printf "#%.0s" (seq 80)
