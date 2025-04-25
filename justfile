@@ -54,3 +54,9 @@ clean:
   end
   trash wasm/*
 
+deploy:
+  #!/usr/bin/env fish
+  rsync -avhz spin.toml 3.o:~/apps/lachuoi/
+  rsync -avhz wasm/*.wasm 3.o:~/apps/lachuoi/wasm/
+  rsync -avhz spin.toml 0.z:~/lachuoi/
+  rsync -avhz wasm/*wasm 0.z:~/lachuoi/wasm/
