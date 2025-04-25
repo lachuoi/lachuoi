@@ -197,11 +197,13 @@ async fn post_to_mastodon(
         let msg: String = format!(
             "[{}] {}\n{} #WSJ\n{}\n({})",
             name,
-            item.title.clone().unwrap(),
-            item.description.unwrap(),
-            item.link.unwrap(),
-            item.pub_date.unwrap()
-        );
+            item.title.clone().unwrap_or("".to_string()),
+            item.description.unwrap_or("".to_string()),
+            item.link.unwrap_or("".to_string()),
+            item.pub_date.unwrap_or("".to_string())
+        )
+        .trim()
+        .to_string();
         let form_body = format!("status={}&visibility={}", &msg, "public");
         let request = Request::builder()
             .method(Post)
