@@ -71,10 +71,10 @@ route = "/ap/user/..."
 component = "ap-user"
 
 [[trigger.http]]
-route = "/utc/..."
-component = "utc"
+route = "/time/..."
+component = "time"
 
-[[etrigger.cron]]
+[[trigger.cron]]
 component = "newspenguin-rss"
 cron_expression = "0 */15 * * * *"
 
@@ -174,8 +174,8 @@ allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
                           "https://raw.githubusercontent.com",
                           "https://theconversation.com"]
 
-[component.utc]
-source = "wasm/utc.wasm"
+[component.time]
+source = "wasm/time.wasm"
 
 ################################################################################
 # Variables

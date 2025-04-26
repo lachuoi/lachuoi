@@ -21,7 +21,7 @@ struct DateTimeDescription {
 #[http_component]
 async fn handle_root(req: Request) -> anyhow::Result<impl IntoResponse> {
     let mut router = Router::new();
-    router.get_async("time", time);
+    router.get_async("/time", time);
     router.get_async("/time/now", now);
     router.get_async("/time/parse", convert);
     Ok(router.handle(req))
@@ -96,27 +96,36 @@ async fn parse_with_formats(
     timestamp: &str,
 ) -> anyhow::Result<Option<(DateTime<Utc>, String)>> {
     // List of common timestamp formats to try
-    let formats = [
-        "%a, %d %b %Y %H:%M:%S %z", // e.g., Thu, 24 Apr 2025 16:28:26 +0000
-        "%a, %d %b %Y %H:%M:%S", // e.g., Thu, 24 Apr 2025 16:28:26 (without timezone)
-        "%Y-%m-%dT%H:%M:%S%z",   // e.g., 2025-04-24T16:28:26+00:00
-        "%Y-%m-%dT%H:%M:%S",     // e.g., 2025-04-24T16:28:26 (without timezone)
-        "%Y-%m-%d %H:%M:%S",     // e.g., 2025-04-24 16:28:26
-        "%Y-%m-%d %I:%M:%S %p",  // e.g., 2025-04-24 04:28:26 PM
-        "%Y/%m/%d %H:%M:%S",     // e.g., 2025/04/24 16:28:26
-        "%Y/%m/%d %I:%M:%S %p",  // e.g., 2025/04/24 04:28:26 PM
-        "%m/%d/%Y %H:%M:%S",     // e.g., 04/24/2025 16:28:26 (US format)
-        "%d/%m/%Y %H:%M:%S",     // e.g., 24/04/2025 16:28:26 (European format)
-        "%d-%m-%Y %H:%M:%S", // e.g., 24-04-2025 16:28:26 (European format with dashes)
-        "%d %b %Y %H:%M:%S", // e.g., 24 Apr 2025 16:28:26
-        "%b %d %Y %H:%M:%S", // e.g., Apr 24 2025 16:28:26
-        "%a %b %d %H:%M:%S %Y", // e.g., Thu Apr 24 16:28:26 2025
-    ];
+    // https://docs.rs/chrono/latest/chrono/format/strftime/index.html
 
+    let formats = [
+        "%a, %d %b %Y %H:%M:%S %z", // Thu, 24 Apr 2025 16:28:26 +0000
+        "%A, %d %b %Y %H:%M:%S %z", // Thursday, 24 Apr 2025 16:28:26 +0000
+        "%a, %d %b %Y %H:%M:%S",    // Thu, 24 Apr 2025 16:28:26 (no timezone)
+        "%Y-%m-%dT%H:%M:%S%:z", // 2025-04-24T16:28:26+00:00  <-- use %:z for colon
+        "%Y-%m-%dT%H:%M:%S",    // 2025-04-24T16:28:26 (no timezone)
+        "%Y-%m-%d %H:%M:%S",    // 2025-04-24 16:28:26
+        "%Y-%m-%d %I:%M:%S %p", // 2025-04-24 04:28:26 PM
+        "%Y/%m/%d %H:%M:%S",    // 2025/04/24 16:28:26
+        "%Y/%m/%d %I:%M:%S %p", // 2025/04/24 04:28:26 PM
+        "%m/%d/%Y %H:%M:%S",    // 04/24/2025 16:28:26 (US style)
+        "%d/%m/%Y %H:%M:%S",    // 24/04/2025 16:28:26 (European style)
+        "%d.%m.%Y %H:%M:%S",    // 24.04.2025 16:28:26
+        "%d-%m-%Y %H:%M:%S",    // 24-04-2025 16:28:26
+        "%d %b %Y %H:%M:%S",    // 24 Apr 2025 16:28:26
+        "%b %d %Y %H:%M:%S",    // Apr 24 2025 16:28:26
+        "%a %b %d %H:%M:%S %Y", // Thu Apr 24 16:28:26 2025
+    ];
     // First, try parsing with each format
-    for format in &formats {
+    for &format in &formats {
         if let Ok(parsed) = DateTime::parse_from_str(timestamp, format) {
             return Ok(Some((parsed.with_timezone(&Utc), format.to_string())));
+        }
+        if let Ok(parsed) = NaiveDateTime::parse_from_str(timestamp, format) {
+            return Ok(Some((
+                DateTime::from_naive_utc_and_offset(parsed, Utc),
+                format.to_string(),
+            )));
         }
     }
 
