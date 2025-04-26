@@ -15,7 +15,9 @@ struct DateTimeDescription {
     #[serde(skip_serializing_if = "Option::is_none")]
     original_timestring_format: Option<String>,
     unix_time: i64,
-    time_in_rfc2822: String,
+    rfc2822: String,
+    rfc3339: String,
+    sql_datetime: String,
 }
 
 #[http_component]
@@ -48,7 +50,9 @@ async fn now(
         original_timestring: None,
         original_timestring_format: None,
         unix_time: current_utc.timestamp(),
-        time_in_rfc2822: current_utc.to_rfc2822(),
+        rfc2822: current_utc.to_rfc2822(),
+        rfc3339: current_utc.to_rfc3339().to_string(),
+        sql_datetime: current_utc.format("%Y-%m-%d %H:%M:%S").to_string(),
     };
 
     let b = serde_json::to_string(&time_description);
@@ -80,7 +84,9 @@ async fn convert(
         original_timestring: Some(query.to_string()),
         original_timestring_format: Some(a.1),
         unix_time: a.0.timestamp(),
-        time_in_rfc2822: a.0.to_rfc2822(),
+        rfc2822: a.0.to_rfc2822(),
+        rfc3339: a.0.to_rfc3339().to_string(),
+        sql_datetime: a.0.format("%Y-%m-%d %H:%M:%S").to_string(),
     };
 
     let b = serde_json::to_string(&time_description);
