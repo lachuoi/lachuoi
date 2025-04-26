@@ -165,6 +165,7 @@ sqlite_databases = ["lachuoi"]
 source = "wasm/mstd_servant.wasm"
 sqlite_databases = ["lachuoi"]
 allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
+                          "https://www.economist.com",
                           "https://mstd.seungjin.net",
                           "https://raw.githubusercontent.com",
                           "https://theconversation.com"]

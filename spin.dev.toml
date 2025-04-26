@@ -181,6 +181,7 @@ sqlite_databases = ["lachuoi"]
 allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
                           "https://mstd.seungjin.net",
                           "https://raw.githubusercontent.com",
+                          "https://www.economist.com",
                           "https://theconversation.com"]
 
 
