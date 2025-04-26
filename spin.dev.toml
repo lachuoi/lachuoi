@@ -81,8 +81,8 @@ route = "/ap/user"
 component = "ap-user"
 
 [[trigger.http]]
-route = "/utc/..."
-component = "utc"
+route = "/time/..."
+component = "time"
 
 [[trigger.cron]]
 component = "newspenguin-rss"
@@ -190,8 +190,8 @@ allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
                           "https://www.economist.com",
                           "https://theconversation.com"]
 
-[component.utc]
-source = "wasm/utc.wasm"
+[component.time]
+source = "wasm/time.wasm"
 
 ################################################################################
 # Variables
@@ -262,5 +262,5 @@ command = "just build mstd-wsj-rss"
 [component.mstd-servant.build]
 command = "just build mstd-servant"
 
-[component.utc.build]
-command = "just build utc"
+[component.time.build]
+command = "just build time"

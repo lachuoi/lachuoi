@@ -862,6 +862,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "time"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "http 0.2.9",
+ "percent-encoding",
+ "serde",
+ "serde_json",
+ "spin-sdk",
+ "url",
+]
+
+[[package]]
 name = "tinystr"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -898,22 +914,6 @@ dependencies = [
  "form_urlencoded",
  "idna",
  "percent-encoding",
-]
-
-[[package]]
-name = "utc"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytes",
- "chrono",
- "chrono-tz",
- "http 0.2.9",
- "percent-encoding",
- "serde",
- "serde_json",
- "spin-sdk",
- "url",
 ]
 
 [[package]]

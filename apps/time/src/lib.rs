@@ -20,27 +20,51 @@ struct DateTimeDescription {
 
 #[http_component]
 async fn handle_root(req: Request) -> anyhow::Result<impl IntoResponse> {
-    let encoded_query = req.query();
+    let mut router = Router::new();
+    router.get_async("time", time);
+    router.get_async("/time/now", now);
+    router.get_async("/time/parse", convert);
+    Ok(router.handle(req))
+}
 
-    if encoded_query.is_empty() {
-        let current_utc = Utc::now();
+async fn time(
+    _req: Request,
+    _params: Params,
+) -> anyhow::Result<impl IntoResponse> {
+    Ok(Response::builder()
+        .status(200)
+        .header("content-type", "text/plain")
+        .body("Usage: time/now, time/parse")
+        .build())
+}
 
-        let time_description = DateTimeDescription {
-            original_timestring: None,
-            original_timestring_format: None,
-            unix_time: current_utc.timestamp(),
-            time_in_rfc2822: current_utc.to_rfc2822(),
-        };
+async fn now(
+    _req: Request,
+    _params: Params,
+) -> anyhow::Result<impl IntoResponse> {
+    let current_utc = Utc::now();
 
-        let b = serde_json::to_string(&time_description);
-
-        return Ok(Response::builder()
-            .status(200)
-            .header("content-type", "application/json")
-            .body(b.unwrap())
-            .build());
+    let time_description = DateTimeDescription {
+        original_timestring: None,
+        original_timestring_format: None,
+        unix_time: current_utc.timestamp(),
+        time_in_rfc2822: current_utc.to_rfc2822(),
     };
 
+    let b = serde_json::to_string(&time_description);
+
+    Ok(Response::builder()
+        .status(200)
+        .header("content-type", "application/json")
+        .body(b.unwrap())
+        .build())
+}
+
+async fn convert(
+    req: Request,
+    _params: Params,
+) -> anyhow::Result<impl IntoResponse> {
+    let encoded_query = req.query();
     let query = percent_decode(encoded_query.as_bytes()).decode_utf8_lossy();
     let a = match parse_with_formats(&query).await? {
         Some(a) => a,
