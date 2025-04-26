@@ -6,9 +6,13 @@
   {
     name: MarketWatch.com - Top Stories
     url: https://feeds.content.dowjones.io/public/rss/mw_topstories
-  }
+  },
   { 
     name: MarketWatch.com - Real-time Headlines  
     url: https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines
-  }
+  },
+  {
+    name: The Economist - Finance and Economics
+    url: https://www.economist.com/finance-and-economics/rss.xml 
+  },
 ]
