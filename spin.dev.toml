@@ -80,21 +80,26 @@ component = "geoip"
 route = "/ap/user"
 component = "ap-user"
 
+[[trigger.http]]
+route = "/utc/..."
+component = "utc"
+
 [[trigger.cron]]
 component = "newspenguin-rss"
-cron_expression = "1 */20 * * * *"
+cron_expression = "1 1 1 1 * *"
+
 
 [[trigger.cron]]
 component = "mstd-random-restaurant"
-cron_expression = "20 20 */8 * * *"
+cron_expression = "1 1 1 1 * *"
 
 [[trigger.cron]]
 component = "mstd-random-cafe"
-cron_expression = "20 20 */8 * * *"
+cron_expression = "1 1 1 1 * *"
 
 [[trigger.cron]]
 component = "mstd-wsj-rss"
-cron_expression = "*/10 * * * * *"
+cron_expression = "1 1 1 1 * *"
 
 [[trigger.cron]]
 component = "mstd-servant"
@@ -110,6 +115,7 @@ files = [{ source = "assets", destination = "/" }]
 
 [component.root]
 source = "wasm/root.wasm"
+
 # allowed_outbound_hosts = ["http://random-place.spin.internal"]
 
 [component.mstd-random-restaurant]
@@ -184,6 +190,8 @@ allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
                           "https://www.economist.com",
                           "https://theconversation.com"]
 
+[component.utc]
+source = "wasm/utc.wasm"
 
 ################################################################################
 # Variables
@@ -213,7 +221,7 @@ mstd_api_uri = "{{ wsj_mstd_api_uri }}"
 mstd_access_token = "{{ wsj_mstd_access_token }}"
 
 [component.mstd-servant.variables]
-mstd_api_uri = "{{ servant_mstd_api_uri }}" 
+mstd_api_uri = "{ servant_mstd_api_uri }}" 
 mstd_access_token = "{{ servant_mstd_access_token }}"
 
 ################################################################################
@@ -253,3 +261,6 @@ command = "just build mstd-wsj-rss"
 
 [component.mstd-servant.build]
 command = "just build mstd-servant"
+
+[component.utc.build]
+command = "just build utc"

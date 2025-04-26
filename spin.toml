@@ -70,7 +70,11 @@ component = "geoip"
 route = "/ap/user/..."
 component = "ap-user"
 
-[[trigger.cron]]
+[[trigger.http]]
+route = "/utc/..."
+component = "utc"
+
+[[etrigger.cron]]
 component = "newspenguin-rss"
 cron_expression = "0 */15 * * * *"
 
@@ -169,6 +173,9 @@ allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
                           "https://mstd.seungjin.net",
                           "https://raw.githubusercontent.com",
                           "https://theconversation.com"]
+
+[component.utc]
+source = "wasm/utc.wasm"
 
 ################################################################################
 # Variables
