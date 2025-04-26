@@ -15,4 +15,16 @@
     name: The Economist - Finance and Economics
     url: https://www.economist.com/finance-and-economics/rss.xml 
   },
+  {
+    name: The Economist - International
+    url: https://www.economist.com/international/rss.xml
+  },
+  {
+    name: The Economist - Science and Technology
+    url: https://www.economist.com/science-and-technology/rss.xml
+  },
+  {
+    name: The Economist - Business
+    url: https://www.economist.com/business/rss.xml
+  }
 ]
