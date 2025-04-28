@@ -1,19 +1,19 @@
 spin_manifest_version = 2
 
 [application]
-name = "rantom-place"
+name = "logger"
 version = "0.1.0"
 authors = ["Seungjin Kim <seungjin@duck.com>"]
 description = ""
 
 [[trigger.http]]
 route = "/..."
-component = "random-place"
+component = "root"
 
-[component.random-place]
-source = "target/wasm32-wasip1/release/random_place.wasm"
-allowed_outbound_hosts = ["https://geoname-seungjin.turso.io"]
+[component.logger]
+source = "target/wasm32-wasip1/release/logger.wasm"
+allowed_outbound_hosts = []
 
-[component.random-place.build]
+[component.logger.build]
 command = "cargo build --target wasm32-wasip1 --release"
 watch = ["src/**/*.rs", "Cargo.toml"]
