@@ -21,10 +21,11 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
         "/place/random/weighted/population",
         weighted_random_location,
     );
-    router.get_async("/place/random", random_location);
+    router.get_async("/place/random", weighted_random_location);
     Ok(router.handle(req))
 }
 
+#[allow(dead_code)]
 async fn random_location(
     _req: Request,
     _params: Params,
