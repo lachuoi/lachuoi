@@ -193,7 +193,7 @@ source = "wasm/time.wasm"
 
 [component.logger]
 source = "wasm/logger.wasm"
-sqlite_database = ["log"]
+sqlite_databases = ["log"]
 
 ################################################################################
 # Variables
