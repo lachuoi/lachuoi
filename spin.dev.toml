@@ -96,6 +96,10 @@ component = "ap-user"
 route = "/time/..."
 component = "time"
 
+[[trigger.http]]
+route = "/ssl/check"
+component = "ssl-check"
+
 [[trigger.cron]]
 component = "newspenguin-rss"
 cron_expression = "1 1 1 1 * *"
@@ -217,6 +221,9 @@ source = "wasm/time.wasm"
 source = "wasm/logger.wasm"
 sqlite_databases = ["log"]
 
+[component.ssl-check]
+source = "wasm/ssl_check.wasm"
+
 ################################################################################
 # Variables
 ################################################################################
@@ -299,3 +306,6 @@ command = "just build time"
 
 [component.logger.build]
 command = "just build logger"
+
+[component.ssl-check.build]
+command = "just build ssl-check"
