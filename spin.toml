@@ -46,9 +46,9 @@ route = "/static/..."
 component = "assets"
 
 [[trigger.http]]
-route = "/random-place/..."
+route = "/place/random/..."
 # route = { private = true }
-component = "random-place"
+component = "place-random"
 
 [[trigger.http]]
 route = "/ifconfig/..."
@@ -125,8 +125,8 @@ allowed_outbound_hosts = ["http://localhost:3000",
                           "https://mstd.seungjin.net"]
 sqlite_databases = ["lachuoi"]
 
-[component.random-place]
-source = "wasm/random_place.wasm"
+[component.place-random]
+source = "wasm/place_random.wasm"
 key_value_stores = ["mem"]
 sqlite_databases = ["geoname"]
 allowed_outbound_hosts = ["https://geoname-seungjin.turso.io",
