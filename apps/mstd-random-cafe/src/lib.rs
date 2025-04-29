@@ -367,7 +367,6 @@ async fn get_image_descriptions(place: &mut Place) -> anyhow::Result<()> {
         let request = Request::builder()
             .method(Post)
             .uri("http://localhost:3000/image/description")
-            //.uri("https://seungjin.requestcatcher.com/foo223")
             .header(
                 "Content-Type",
                 format!("multipart/form-data; boundary={}", boundary),
@@ -375,6 +374,7 @@ async fn get_image_descriptions(place: &mut Place) -> anyhow::Result<()> {
             .header("Content-Length", content_length)
             .body(body)
             .build();
+        // TODO: Check if above request get not 200.
         let response: Response = spin_sdk::http::send(request).await?;
         let description = str::from_utf8(response.body()).unwrap();
         let d2 = serde_json::from_str::<Value>(description).unwrap();
