@@ -25,7 +25,6 @@ google_ai_api_key = { required = true }
 
 image_description_google_ai_api_uri = { required = true }
 image_description_google_ai_prompt = { required = true }
-
 wsj_mstd_api_uri = { required = true }
 wsj_mstd_access_token = { required = true }
 
@@ -126,7 +125,6 @@ files = [{ source = "assets", destination = "/" }]
 
 [component.root]
 source = "wasm/root.wasm"
-
 # allowed_outbound_hosts = ["http://place-random.spin.internal"]
 
 [component.mstd-random-restaurant]
@@ -135,8 +133,7 @@ source = "wasm/mstd_random_restaurant.wasm"
 allowed_outbound_hosts = ["http://localhost:3000",
                           "https://maps.googleapis.com",
                           "https://*.googleusercontent.com",
-                          "https://mstd.seungjin.net",
-                          "https://seungjin.requestcatcher.com"]
+                          "https://mstd.seungjin.net"]
 sqlite_databases = ["lachuoi"]
 
 [component.mstd-random-cafe]
@@ -145,8 +142,7 @@ source = "wasm/mstd_random_cafe.wasm"
 allowed_outbound_hosts = ["http://localhost:3000",
                           "https://maps.googleapis.com",
                           "https://*.googleusercontent.com",
-                          "https://mstd.seungjin.net",
-                          "https://seungjin.requestcatcher.com"]
+                          "https://mstd.seungjin.net"]
 sqlite_databases = ["lachuoi"]
 
 [component.place]
@@ -155,7 +151,7 @@ source = "wasm/place.wasm"
 [component.place-random]
 source = "wasm/place_random.wasm"
 key_value_stores = ["mem"]
-sqlite_databases = ["geoname", "mem"]
+sqlite_databases = ["geoname"]
 allowed_outbound_hosts = ["https://geoname-seungjin.turso.io",
                           "https://raw.githubusercontent.com"]
 
@@ -173,6 +169,7 @@ allowed_outbound_hosts = ["http://localhost:3000"]
 source = "wasm/newspenguin_rss.wasm"
 sqlite_databases = ["lachuoi"]
 allowed_outbound_hosts = ["https://www.newspenguin.com",
+                          "https://feedpub-seungjin.turso.io",
                           "https://mstd.seungjin.net"]
 
 [component.image-description]
@@ -205,9 +202,9 @@ sqlite_databases = ["lachuoi"]
 source = "wasm/mstd_servant.wasm"
 sqlite_databases = ["lachuoi"]
 allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
+                          "https://www.economist.com",
                           "https://mstd.seungjin.net",
                           "https://raw.githubusercontent.com",
-                          "https://www.economist.com",
                           "https://theconversation.com"]
 
 [component.time]
