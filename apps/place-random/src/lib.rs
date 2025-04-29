@@ -96,8 +96,8 @@ async fn weighted_random_location(
                 .get("base_population")
                 .unwrap_or(default_pop);
 
-            let connection = Connection::open("geoname")
-                .expect("geoname libsql connection error");
+            let connection = Connection::open("geoname").unwrap();
+                //.expect("geoname libsql connection error");
             let execute_params =
                 [SqlValue::Integer(base_population.as_i64().unwrap())];
             let rowset = connection.execute(
@@ -112,8 +112,8 @@ async fn weighted_random_location(
             for row in rows {
                 let population = row
                     .get::<i64>(1)
-                    .map(|v| v as f64)
-                    .expect("Expected a float but found another type!");
+                    .map(|v| v as f64).unwrap();
+                    //.expect("Expected a float but found another type!");
 
                 // Weighted by Countries
                 if let Some(obj) = weighted_countries.as_object() {
@@ -170,7 +170,7 @@ async fn weighted_random_location(
     // println!("{} -- {} - {}", random_index, id, value);
 
     let connection =
-        Connection::open("geoname").expect("geoname libsql connection error");
+        Connection::open("geoname").unwrap(); //.expect("geoname libsql connection error");
     let execute_params = [SqlValue::Integer(id as i64)];
     let rowset = connection.execute(
         "SELECT geonameid, alternatenames, asciiname, country, elevation, fclass, latitude, longitude, moddate, name, population, timezone FROM cities15000 WHERE geonameid = ?",
