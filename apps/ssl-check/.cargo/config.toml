@@ -1,0 +1,5 @@
+[env]
+OPENSSL_DIR = "/var/home/seungjin/Works/c/openssl-wasm/precompiled"
+# or
+#OPENSSL_INCLUDE_DIR = "/var/home/seungjin/Works/c/openssl-wasm/precompiled/include"
+#OPENSSL_LIB_DIR = "/var/home/seungjin/Works/c/openssl-wasm/precompiled/lib"
