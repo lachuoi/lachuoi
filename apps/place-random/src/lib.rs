@@ -31,7 +31,8 @@ async fn random_location(
     _params: Params,
 ) -> anyhow::Result<impl IntoResponse> {
     let connection =
-        Connection::open("geoname").expect("geoname libsql connection error");
+        Connection::open("geoname").unwrap();
+                                             //.expect("geoname libsql connection error");
 
     let execute_params = [SqlValue::Integer(50000)];
     let rowset = connection.execute(

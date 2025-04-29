@@ -71,6 +71,10 @@ route = "/ap/user/..."
 component = "ap-user"
 
 [[trigger.http]]
+route = "/logger/..."
+component = "logger"
+
+[[trigger.http]]
 route = "/time/..."
 component = "time"
 
@@ -187,7 +191,7 @@ allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
 [component.time]
 source = "wasm/time.wasm"
 
-[componenet.logger]
+[component.logger]
 source = "wasm/logger.wasm"
 sqlite_database = ["log"]
 
