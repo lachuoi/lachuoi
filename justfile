@@ -54,9 +54,17 @@ clean:
   end
   trash wasm/*
 
-deploy:
+deploy app:
   #!/usr/bin/env fish
-  rsync -avhz spin.toml 3.o:~/apps/lachuoi/
-  rsync -avhz wasm/*.wasm 3.o:~/apps/lachuoi/wasm/
-  rsync -avhz spin.toml 0.z:~/lachuoi/
-  rsync -avhz wasm/*wasm 0.z:~/lachuoi/wasm/
+  switch "{{app}}"
+    case --lazy
+        rsync -avhz spin.toml 3.o:~/apps/lachuoi/
+        rsync -avhz wasm/*.wasm 3.o:~/apps/lachuoi/wasm/
+        rsync -avhz spin.toml 0.z:~/lachuoi/
+        rsync -avhz wasm/*wasm 0.z:~/lachuoi/wasm/
+       ;;
+    case '*'
+        echo "You did not implement any proper deployment yet. Do it!"
+        ;;
+  end
+

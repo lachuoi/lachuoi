@@ -48,7 +48,7 @@ component = "assets"
 [[trigger.http]]
 route = "/place/random/..."
 # route = { private = true }
-component = "place-place"
+component = "place-random"
 
 [[trigger.http]]
 route = "/ifconfig/..."
@@ -165,7 +165,7 @@ allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
 
 [component.webfinger]
 source = "wasm/webfinger.wasm"
-sqlite_database = ["lachuoi"]
+sqlite_databases = ["lachuoi"]
 
 [component.geoip]
 source = "wasm/geoip.wasm"
