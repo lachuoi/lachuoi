@@ -11,11 +11,10 @@ use spin_sdk::{
 };
 use std::str;
 
-/// A simple Spin HTTP component.
-
 #[http_component]
 async fn handle_root(req: Request) -> Result<impl IntoResponse> {
     let mut router = Router::suffix();
+    // Todo: do various weighted logic. currently only one. 
     router.get_async("weighted", weighted_random_location);
     router.get_async("weighted/population", weighted_random_location);
     router.get_async("", weighted_random_location);
