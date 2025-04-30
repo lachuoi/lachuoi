@@ -4,7 +4,7 @@ use rand::prelude::*;
 use serde_hjson;
 use serde_json::{json, Number, Value};
 use spin_sdk::{
-    http::{IntoResponse, Params, Request, Response, Router, Method::Get},
+    http::{IntoResponse, Method::Get, Params, Request, Response, Router},
     http_component,
     key_value::Store,
     sqlite::{Connection, QueryResult, Value as SqlValue},
@@ -14,7 +14,7 @@ use std::str;
 #[http_component]
 async fn handle_root(req: Request) -> Result<impl IntoResponse> {
     let mut router = Router::suffix();
-    // Todo: do various weighted logic. currently only one. 
+    // Todo: do various weighted logic. currently only one.
     router.get_async("weighted", weighted_random_location);
     router.get_async("weighted/population", weighted_random_location);
     router.get_async("", weighted_random_location);
@@ -22,13 +22,12 @@ async fn handle_root(req: Request) -> Result<impl IntoResponse> {
 }
 
 #[allow(dead_code)]
-async fn random_location(
+async fn raw_random_location(
     _req: Request,
     _params: Params,
 ) -> anyhow::Result<impl IntoResponse> {
-    let connection =
-        Connection::open("geoname").unwrap();
-                                             //.expect("geoname libsql connection error");
+    let connection = Connection::open("geoname").unwrap();
+    //.expect("geoname libsql connection error");
 
     let execute_params = [SqlValue::Integer(50000)];
     let rowset = connection.execute(
@@ -56,29 +55,11 @@ async fn weighted_random_location(
     let request = Request::builder()
         .method(Get)
         .uri("https://raw.githubusercontent.com/seungjin/lachuoi/refs/heads/main/assets/random-place-wegith.hjson")
-        
         .build();
     let response: Response = spin_sdk::http::send(request).await?;
     let response_body = str::from_utf8(response.body()).unwrap();
 
     let weighted_factors: Value = serde_hjson::from_str(response_body).unwrap();
-
-    // TODO: receive this over param
-    // let weighted_factors = json!({
-    //     "base_population" : 50000,
-    //     "country" : {
-    //         // Filtering out. China and North Korea
-    //         "CN": 0, "KP": 0,
-    //         // Weighted more
-    //         "DE": 2.5, "GB": 2, "FR": 2.5, "ES": 2, "IT": 2.5, "TW": 1.5, "TH": 2,
-    //         "NL": 2, "PT": 1.8,
-    //         // Weighted less
-    //         "IN": 0.25, "ID": 0.4, "PK": 0.4
-    //     },
-    //     "city": {
-    //         "Bangkok": 0.8
-    //      }
-    // });
 
     let a = match cache.get(CACHEKEY)? {
         Some(x) => {
@@ -93,7 +74,7 @@ async fn weighted_random_location(
                 .unwrap_or(default_pop);
 
             let connection = Connection::open("geoname").unwrap();
-                //.expect("geoname libsql connection error");
+            //.expect("geoname libsql connection error");
             let execute_params =
                 [SqlValue::Integer(base_population.as_i64().unwrap())];
             let rowset = connection.execute(
@@ -106,10 +87,8 @@ async fn weighted_random_location(
             let weighted_countries = weighted_factors.get("country").unwrap();
             let weighted_cities = weighted_factors.get("city").unwrap();
             for row in rows {
-                let population = row
-                    .get::<i64>(1)
-                    .map(|v| v as f64).unwrap();
-                    //.expect("Expected a float but found another type!");
+                let population = row.get::<i64>(1).map(|v| v as f64).unwrap();
+                //.expect("Expected a float but found another type!");
 
                 // Weighted by Countries
                 if let Some(obj) = weighted_countries.as_object() {
@@ -165,8 +144,7 @@ async fn weighted_random_location(
     let value = data[random_index].1;
     // println!("{} -- {} - {}", random_index, id, value);
 
-    let connection =
-        Connection::open("geoname").unwrap(); //.expect("geoname libsql connection error");
+    let connection = Connection::open("geoname").unwrap(); //.expect("geoname libsql connection error");
     let execute_params = [SqlValue::Integer(id as i64)];
     let rowset = connection.execute(
         "SELECT geonameid, alternatenames, asciiname, country, elevation, fclass, latitude, longitude, moddate, name, population, timezone FROM cities15000 WHERE geonameid = ?",
