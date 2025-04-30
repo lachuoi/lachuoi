@@ -607,8 +607,8 @@ dependencies = [
 
 [[package]]
 name = "spin-executor"
-version = "3.1.0"
-source = "git+https://github.com/spinframework/spin-rust-sdk#2b0dbd7e5cb46b72df1eae0d582980488834a452"
+version = "3.1.1"
+source = "git+https://github.com/spinframework/spin-rust-sdk?branch=main#71c9aa475a91f9e1a5ad4c18edf8edadfccf64bb"
 dependencies = [
  "futures",
  "once_cell",
@@ -617,8 +617,8 @@ dependencies = [
 
 [[package]]
 name = "spin-macro"
-version = "3.1.0"
-source = "git+https://github.com/spinframework/spin-rust-sdk#2b0dbd7e5cb46b72df1eae0d582980488834a452"
+version = "3.1.1"
+source = "git+https://github.com/spinframework/spin-rust-sdk?branch=main#71c9aa475a91f9e1a5ad4c18edf8edadfccf64bb"
 dependencies = [
  "anyhow",
  "bytes",
@@ -629,8 +629,8 @@ dependencies = [
 
 [[package]]
 name = "spin-sdk"
-version = "3.1.0"
-source = "git+https://github.com/spinframework/spin-rust-sdk#2b0dbd7e5cb46b72df1eae0d582980488834a452"
+version = "3.1.1"
+source = "git+https://github.com/spinframework/spin-rust-sdk?branch=main#71c9aa475a91f9e1a5ad4c18edf8edadfccf64bb"
 dependencies = [
  "anyhow",
  "async-trait",

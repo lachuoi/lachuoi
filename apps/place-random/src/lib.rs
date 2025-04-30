@@ -15,13 +15,10 @@ use std::str;
 
 #[http_component]
 async fn handle_root(req: Request) -> Result<impl IntoResponse> {
-    let mut router = Router::new();
-    router.get_async("/place/random/weighted", weighted_random_location);
-    router.get_async(
-        "/place/random/weighted/population",
-        weighted_random_location,
-    );
-    router.get_async("/place/random", weighted_random_location);
+    let mut router = Router::suffix();
+    router.get_async("weighted", weighted_random_location);
+    router.get_async("weighted/population", weighted_random_location);
+    router.get_async("", weighted_random_location);
     Ok(router.handle(req))
 }
 
