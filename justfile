@@ -1,70 +1,35 @@
+export RUST_LOG := "spin-trace"
 
-build app :
-  #!/usr/bin/env fish
-  cd {{justfile_directory()}}
-  switch "{{app}}"
-    case --all
-        cd apps
-        for app in (ls -d -- */ | grep -v '^_')
-            printf "#%.0s" (seq 80)
-            echo
-            echo "Build: $app"
-            cd $app
-            spin build || exit
-            set WASM_FILE (echo $app | tr '-' '_')
-            if test -e Cargo.toml
-              cp target/wasm32-wasip1/release/$WASM_FILE.wasm ../../wasm/
-            else
-              cp $WASM_FILE.wasm ../../wasm/
-            end
-            cd ..
-        end
-        printf "#%.0s" (seq 80)
-        echo
-        ;;
-    case '*'
-        printf "#%.0s" (seq 80)
-        echo
-        cd apps/{{app}}
-        spin build || exit
-        set WASM_FILE (echo "{{app}}" | tr '-' '_')
-        cp target/wasm32-wasip1/release/app.wasm ../../wasm/$WASM_FILE.wasm
-        printf "#%.0s" (seq 80)
-        echo
-        ;;
-  end
+# Set the default recipe
+default:
+    just test
+    cargo build --release
 
-up: 
-  #!/usr/bin/env fish
-  cd {{justfile_directory()}}
-  # for line in (cat .env | grep -v '^#' | grep -v '^[[:space:]]*$')
-  #   set item (string split -m 1 '=' $line)
-  #   set -gx $item[1] $item[2]
-  # end
-  spin up --from spin.dev.toml --runtime-config-file runtime-config.dev.toml
+# Run linting and unit tests
+test:
+    just lint
+    just test-unit
 
-clean:
-  #!/usr/bin/env fish
-  cd {{justfile_directory()}}
-  for app in (ls -D ./apps/ | grep -v '^_')
-    echo "Clean: $app"
-    cd apps/$app
-    cargo clean
-    cd ../..            
-  end
-  trash wasm/*
+# Lint the codebase
+lint:
+    cargo clippy --all-features -- -D warnings
+    cargo fmt -- --check
 
-deploy app:
-  #!/usr/bin/env fish
-  switch "{{app}}"
-    case --lazy
-        rsync -avhz spin.toml 3.o:~/apps/lachuoi/
-        rsync -avhz wasm/*.wasm 3.o:~/apps/lachuoi/wasm/
-        rsync -avhz spin.toml 0.z:~/lachuoi/
-        rsync -avhz wasm/*wasm 0.z:~/lachuoi/wasm/
-       ;;
-    case '*'
-        echo "You did not implement any proper deployment yet. Do it!"
-        ;;
-  end
+# Run unit tests with dynamic target
+test-unit:
+    RUST_LOG=${RUST_LOG} cargo test --target=`rustc -vV | sed -n 's|host: ||p'`
 
+release:
+    #!/usr/bin/env fish
+    set this_version (grep '^version =' spin.toml | sed -E 's/version = "(.*)"/\1/')
+    git tag v$this_version
+    git push origin v$this_version
+    set -e this_version
+
+up:
+    #!/usr/bin/env fish
+    #for line in (cat ../../.env | grep -v '^#' | grep -v '^[[:space:]]*$')
+    #    set item (string split -m 1 '=' $line)
+    #    set -gx $item[1] $item[2]
+    #end
+    spin up --build --runtime-config-file ../../runtime-config.dev.toml

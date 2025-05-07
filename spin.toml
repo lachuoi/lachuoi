@@ -39,7 +39,7 @@ logger_auth_table = { required = true }
 
 [[trigger.http]]
 route = "/"
-component = "root"
+component = "doormat"
 
 [[trigger.http]]
 route = "/static/..."
@@ -79,7 +79,7 @@ route = "/time/..."
 component = "time"
 
 [[trigger.cron]]
-component = "newspenguin-rss"
+component = "mstd-newspenguin-rss"
 cron_expression = "0 */15 * * * *"
 
 [[trigger.cron]]
@@ -107,100 +107,109 @@ cron_expression = "40 */10 * * * *"
 source = { url = "https://github.com/fermyon/spin-fileserver/releases/download/v0.3.0/spin_static_fs.wasm", digest = "sha256:ef88708817e107bf49985c7cefe4dd1f199bf26f6727819183d5c996baa3d148" }
 files = [{ source = "assets", destination = "/" }]
 
-[component.root]
-source = "wasm/root.wasm"
+[component.doormat]
+source = { url = "https://github.com/lachuoi/doormat/releases/download/v0.0.1/doormat.wasm", digest = "sha256:39ed75f7e324382b79f06e85e9b4ad009ac5a031d7aaeb9a1ce78cc4fde9ce32" }
 # allowed_outbound_hosts = ["http://random-place.spin.internal"]
 
 [component.mstd-random-restaurant]
-source = "wasm/mstd_random_restaurant.wasm"
-# allowed_outbound_hosts = ["http://random-place.spin.internal"]
-allowed_outbound_hosts = ["http://localhost:3000",
-                          "https://maps.googleapis.com",
-                          "https://*.googleusercontent.com",
-                          "https://mstd.seungjin.net"]
+source = { url = "https://github.com/lachuoi/mstd-random-restaurant/releases/download/v0.0.1/mstd_random_restaurant.wasm", digest = "sha256:9d8da0fcee4ce3aa5d4a005af0895d47ffb4a911da30fc29eb2cc9c3ff1679c8" }
+allowed_outbound_hosts = [
+  #"http://random-place.spin.internal",
+  "http://localhost:3000",
+  "https://maps.googleapis.com",
+  "https://*.googleusercontent.com",
+  "https://mstd.seungjin.net",
+]
 sqlite_databases = ["lachuoi"]
 
 [component.mstd-random-cafe]
-source = "wasm/mstd_random_cafe.wasm"
-# allowed_outbound_hosts = ["http://random-place.spin.internal"]
-allowed_outbound_hosts = ["http://localhost:3000",
-                          "https://maps.googleapis.com",
-                          "https://*.googleusercontent.com",
-                          "https://mstd.seungjin.net"]
+source = { url = "https://github.com/lachuoi/mstd-random-cafe/releases/download/v0.0.1/mstd_random_cafe.wasm", digest = "sha256:84436bee45ee1af5834c63b364f5a6cffe10147bb1dd1d1741a685ccd4e2e1df" }
+allowed_outbound_hosts = [
+  #"http://random-place.spin.internal",
+  "http://localhost:3000",
+  "https://maps.googleapis.com",
+  "https://*.googleusercontent.com",
+  "https://mstd.seungjin.net",
+]
 sqlite_databases = ["lachuoi"]
 
 [component.place]
-source = "wasm/place.wasm"
+source = { url = "https://github.com/lachuoi/place/releases/download/v0.0.1/place.wasm", digest = "sha256:2ec0228bb38910829cc7049994a06d39501a3b1ffa19796645d01a979b35a147" }
 
 [component.place-random]
-source = "wasm/place_random.wasm"
+source = { url = "https://github.com/lachuoi/place-random/releases/download/v0.0.1/place_random.wasm", digest = "sha256:13912e28e58e105d93386ac814a02373ab9820fd853ce45944b9582bc2afc590" }
 key_value_stores = ["mem"]
 sqlite_databases = ["geoname"]
-allowed_outbound_hosts = ["https://geoname-seungjin.turso.io",
-                          "https://raw.githubusercontent.com"]
+allowed_outbound_hosts = [
+  "https://geoname-seungjin.turso.io",
+  "https://raw.githubusercontent.com",
+]
 
 [component.place-timezone]
-source = "wasm/place_timezone.wasm"
-
-[component.place-population]
-source = "wasm/place_population.wasm"
+source = { url = "https://github.com/lachuoi/place-timezone/releases/download/v0.0.1/place_timezone.wasm", digest = "sha256:c318a3c8298e3ae423402d52c45d04dc08f854b943a45ac5060fd3598fc95da0" }
 
 [component.ifconfig]
-source = "wasm/ifconfig.wasm"
+source = { url = "https://github.com/lachuoi/ifconfig/releases/download/v0.0.1/ifconfig.wasm", digest = "sha256:fa76fbe95fb33488f6bced20bcbbebcf91d61fb0f0261a2288d6d1bba1365abb" }
 allowed_outbound_hosts = ["http://localhost:3000"]
 
-[component.newspenguin-rss]
-source = "wasm/newspenguin_rss.wasm"
+[component.mstd-newspenguin-rss]
+source = { url = "https://github.com/lachuoi/mstd-newspenguin-rss/releases/download/v0.0.1/mstd_newspenguin_rss.wasm", digest = "sha256:db8b21500d563ee1b9934530cefd361f639700f160d177e3f00adeec45dd37ea" }
 sqlite_databases = ["lachuoi"]
-allowed_outbound_hosts = ["https://www.newspenguin.com",
-                          "https://feedpub-seungjin.turso.io",
-                          "https://mstd.seungjin.net"]
+allowed_outbound_hosts = [
+  "https://www.newspenguin.com",
+  "https://feedpub-seungjin.turso.io",
+  "https://mstd.seungjin.net",
+]
 
 [component.image-description]
-source = "wasm/image_description.wasm"
+source = { url = "https://github.com/lachuoi/image-description/releases/download/v0.0.1/image_description.wasm", digest = "sha256:532318da15255c56a409662340a810288061874d4ad41d726c83cb0e7e22658b" }
 allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 
 [component.mstd-wsj-rss]
-source = "wasm/mstd_wsj_rss.wasm"
+source = { url = "https://github.com/lachuoi/mstd-wsj-rss/releases/download/v0.0.1/mstd_wsj_rss.wasm", digest = "sha256:c153a1f271a70397e163f6b79f13d7d80b486593415ab01830df5807125fb964" }
 sqlite_databases = ["lachuoi"]
-allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
-                          "https://mstd.seungjin.net",
-                          "https://raw.githubusercontent.com"]
+allowed_outbound_hosts = [
+  "https://feeds.content.dowjones.io",
+  "https://mstd.seungjin.net",
+  "https://raw.githubusercontent.com",
+]
 
 [component.webfinger]
-source = "wasm/webfinger.wasm"
+source = { url = "https://github.com/lachuoi/webfinger/releases/download/v0.0.1/webfinger.wasm", digest = "sha256:6531213d5ab8bba527a17fad6fcd6a107f52cd29ef504b3a6a9cc0aecc58b51e" }
 sqlite_databases = ["lachuoi"]
 
 [component.geoip]
-source = "wasm/geoip.wasm"
+source = { url = "https://github.com/lachuoi/geoip/releases/download/v0.0.1/geoip.wasm", digest = "sha256:b8f8ee17230af9bebe3be59ab6870c8de408a4ed16b1fc352031829b9ea7758b" }
 files = [{ source = "resource/geoip", destination = "/" }]
 
 [component.ap-user]
-source = "wasm/ap_user.wasm"
+source = { url = "https://github.com/lachuoi/ap-user/releases/download/v0.0.1/ap_user.wasm", digest = "sha256:8c067a94fcaa8c26800394e2258bcec7973e2ac2fdb7b943451d66a47391c0f2" }
 sqlite_databases = ["lachuoi"]
 
 [component.mstd-servant]
-source = "wasm/mstd_servant.wasm"
+source = { url = "https://github.com/lachuoi/mstd-servant/releases/download/v0.0.1/mstd_servant.wasm", digest = "sha256:542d602c0d1098e6d54f0e480a4fda2f05eda046ad7824b3826c51505c8453d0" }
 sqlite_databases = ["lachuoi"]
-allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
-                          "https://www.economist.com",
-                          "https://mstd.seungjin.net",
-                          "https://raw.githubusercontent.com",
-                          "https://theconversation.com"]
+allowed_outbound_hosts = [
+  "https://feeds.content.dowjones.io",
+  "https://www.economist.com",
+  "https://mstd.seungjin.net",
+  "https://raw.githubusercontent.com",
+  "https://theconversation.com",
+]
 
 [component.time]
-source = "wasm/time.wasm"
+source = { url = "https://github.com/lachuoi/time/releases/download/v0.0.1/time.wasm", digest = "sha256:e324ef117cada58c2e1bc709cf8f4bbd7ba479ee2f007c6227fc49e1065695c8" }
 
 [component.logger]
-source = "wasm/logger.wasm"
+source = { url = "https://github.com/lachuoi/logger/releases/download/v0.0.1/logger.wasm", digest = "sha256:b3a5d02e17ac7aaf44ef6c5d406d0d275d6d8596a688eda163d61de7ff26f95a" }
 sqlite_databases = ["log"]
 
 ################################################################################
 # Variables
 ################################################################################
-[component.newspenguin-rss.variables]
+[component.mstd-newspenguin-rss.variables]
 rss_uri = "{{ newspenguin_rss_uri }}"
-mstd_api_uri = "{{ newspenguin_mstd_api_uri }}" 
+mstd_api_uri = "{{ newspenguin_mstd_api_uri }}"
 mstd_access_token = "{{ newspenguin_mstd_access_token }}"
 
 [component.mstd-random-restaurant.variables]
@@ -216,18 +225,18 @@ google_location_api_key = "{{ mstd_random_cafe_google_location_api_key }}"
 [component.image-description.variables]
 google_ai_api_key = "{{ google_ai_api_key }}"
 google_ai_api_uri = "{{ image_description_google_ai_api_uri }}"
-google_ai_prompt =  "{{ image_description_google_ai_prompt }}"
+google_ai_prompt = "{{ image_description_google_ai_prompt }}"
 
 [component.mstd-wsj-rss.variables]
-mstd_api_uri = "{{ wsj_mstd_api_uri }}" 
+mstd_api_uri = "{{ wsj_mstd_api_uri }}"
 mstd_access_token = "{{ wsj_mstd_access_token }}"
 
 [component.mstd-servant.variables]
-mstd_api_uri = "{{ servant_mstd_api_uri }}" 
+mstd_api_uri = "{{ servant_mstd_api_uri }}"
 mstd_access_token = "{{ servant_mstd_access_token }}"
 
 [component.logger.variables]
 auth_table = "{{ logger_auth_table }}"
 
 ## No build section needed for production 
-## Fin. 
+## Fin.

@@ -39,7 +39,7 @@ logger_auth_table = { required = true }
 
 [[trigger.http]]
 route = "/"
-component = "root"
+component = "doormat"
 
 [[trigger.http]]
 route = "/static/..."
@@ -127,26 +127,30 @@ cron_expression = "1 1 * * * *"
 source = { url = "https://github.com/fermyon/spin-fileserver/releases/download/v0.3.0/spin_static_fs.wasm", digest = "sha256:ef88708817e107bf49985c7cefe4dd1f199bf26f6727819183d5c996baa3d148" }
 files = [{ source = "assets", destination = "/" }]
 
-[component.root]
-source = "wasm/root.wasm"
-# allowed_outbound_hosts = ["http://place-random.spin.internal"]
+[component.doormat]
+source = { url = "https://github.com/lachuoi/doormat/releases/download/v0.0.1/doormat.wasm", digest = "39ed75f7e324382b79f06e85e9b4ad009ac5a031d7aaeb9a1ce78cc4fde9ce32" }
+# allowed_outbound_hosts = ["http://random-place.spin.internal"]
 
 [component.mstd-random-restaurant]
 source = "wasm/mstd_random_restaurant.wasm"
 # allowed_outbound_hosts = ["http://place-random.spin.internal"]
-allowed_outbound_hosts = ["http://localhost:3000",
-                          "https://maps.googleapis.com",
-                          "https://*.googleusercontent.com",
-                          "https://mstd.seungjin.net"]
+allowed_outbound_hosts = [
+  "http://localhost:3000",
+  "https://maps.googleapis.com",
+  "https://*.googleusercontent.com",
+  "https://mstd.seungjin.net",
+]
 sqlite_databases = ["lachuoi"]
 
 [component.mstd-random-cafe]
 source = "wasm/mstd_random_cafe.wasm"
 # allowed_outbound_hosts = ["http://place-random.spin.internal"]
-allowed_outbound_hosts = ["http://localhost:3000",
-                          "https://maps.googleapis.com",
-                          "https://*.googleusercontent.com",
-                          "https://mstd.seungjin.net"]
+allowed_outbound_hosts = [
+  "http://localhost:3000",
+  "https://maps.googleapis.com",
+  "https://*.googleusercontent.com",
+  "https://mstd.seungjin.net",
+]
 sqlite_databases = ["lachuoi"]
 
 [component.place]
@@ -156,8 +160,10 @@ source = "wasm/place.wasm"
 source = "wasm/place_random.wasm"
 key_value_stores = ["mem"]
 sqlite_databases = ["geoname"]
-allowed_outbound_hosts = ["https://geoname-seungjin.turso.io",
-                          "https://raw.githubusercontent.com"]
+allowed_outbound_hosts = [
+  "https://geoname-seungjin.turso.io",
+  "https://raw.githubusercontent.com",
+]
 
 [component.place-timezone]
 source = "wasm/place_timezone.wasm"
@@ -172,9 +178,11 @@ allowed_outbound_hosts = ["http://localhost:3000"]
 [component.newspenguin-rss]
 source = "wasm/newspenguin_rss.wasm"
 sqlite_databases = ["lachuoi"]
-allowed_outbound_hosts = ["https://www.newspenguin.com",
-                          "https://feedpub-seungjin.turso.io",
-                          "https://mstd.seungjin.net"]
+allowed_outbound_hosts = [
+  "https://www.newspenguin.com",
+  "https://feedpub-seungjin.turso.io",
+  "https://mstd.seungjin.net",
+]
 
 [component.image-description]
 source = "wasm/image_description.wasm"
@@ -183,9 +191,11 @@ allowed_outbound_hosts = ["https://generativelanguage.googleapis.com"]
 [component.mstd-wsj-rss]
 source = "wasm/mstd_wsj_rss.wasm"
 sqlite_databases = ["lachuoi"]
-allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
-                          "https://mstd.seungjin.net",
-                          "https://raw.githubusercontent.com"]
+allowed_outbound_hosts = [
+  "https://feeds.content.dowjones.io",
+  "https://mstd.seungjin.net",
+  "https://raw.githubusercontent.com",
+]
 
 [component.webfinger]
 source = "wasm/webfinger.wasm"
@@ -205,11 +215,13 @@ sqlite_databases = ["lachuoi"]
 [component.mstd-servant]
 source = "wasm/mstd_servant.wasm"
 sqlite_databases = ["lachuoi"]
-allowed_outbound_hosts = ["https://feeds.content.dowjones.io",
-                          "https://www.economist.com",
-                          "https://mstd.seungjin.net",
-                          "https://raw.githubusercontent.com",
-                          "https://theconversation.com"]
+allowed_outbound_hosts = [
+  "https://feeds.content.dowjones.io",
+  "https://www.economist.com",
+  "https://mstd.seungjin.net",
+  "https://raw.githubusercontent.com",
+  "https://theconversation.com",
+]
 
 [component.time]
 source = "wasm/time.wasm"
@@ -226,7 +238,7 @@ source = "wasm/ssl_check.wasm"
 ################################################################################
 [component.newspenguin-rss.variables]
 rss_uri = "{{ newspenguin_rss_uri }}"
-mstd_api_uri = "{{ newspenguin_mstd_api_uri }}" 
+mstd_api_uri = "{{ newspenguin_mstd_api_uri }}"
 mstd_access_token = "{{ newspenguin_mstd_access_token }}"
 
 [component.mstd-random-restaurant.variables]
@@ -243,14 +255,14 @@ google_location_api_key = "{{ mstd_random_cafe_google_location_api_key }}"
 google_ai_api_key = "{{ google_ai_api_key }}"
 
 google_ai_api_uri = "{{ image_description_google_ai_api_uri }}"
-google_ai_prompt =  "{{ image_description_google_ai_prompt }}"
+google_ai_prompt = "{{ image_description_google_ai_prompt }}"
 
 [component.mstd-wsj-rss.variables]
-mstd_api_uri = "{{ wsj_mstd_api_uri }}" 
+mstd_api_uri = "{{ wsj_mstd_api_uri }}"
 mstd_access_token = "{{ wsj_mstd_access_token }}"
 
 [component.mstd-servant.variables]
-mstd_api_uri = "{{ servant_mstd_api_uri }}" 
+mstd_api_uri = "{{ servant_mstd_api_uri }}"
 mstd_access_token = "{{ servant_mstd_access_token }}"
 
 [component.logger.variables]
@@ -261,8 +273,6 @@ auth_table = "{{ logger_auth_table }}"
 # Build
 ################################################################################
 
-[component.root.build]
-command = "just build root"
 
 [component.mstd-random-restaurant.build]
 command = "just build mstd-random-restaurant"

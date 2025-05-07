@@ -1,8 +1,11 @@
+target/
 .spin/
 *.wasm
 runtime-config.prod.toml
 runtime-config.dev.toml
 .env
 *.mmdb
-resource/geoip/*.mmdb
+*.wasm
 *.nogit
+*.secret
+*.secrets
