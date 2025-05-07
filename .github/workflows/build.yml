@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+name: Test
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+env:
+  CARGO_TERM_COLOR: always
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Install latest Rust stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          default: true
+          components: clippy, rustfmt
+
+      - name: Install Wasm Rust target
+        run: rustup target add wasm32-wasip1
+
+      - name: Install spin
+        run: |
+          mkdir spin-install
+          cd spin-install
+          curl -fsSL https://developer.fermyon.com/downloads/install.sh | bash
+          sudo mv spin /usr/local/bin/
+
+      - name: Install spin-trigger-cron
+        run: spin plugins install --url https://github.com/fermyon/spin-trigger-cron/releases/download/canary/trigger-cron.json --yes
+
+      - name: Install cargo-component
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: cargo-component
+
+      - name: Install Just
+        uses: baptiste0928/cargo-install@v3
+        with:
+          crate: just
+      
+      - name: Just
+        run: just
+        env:
+          RUST_LOG: spin=trace
