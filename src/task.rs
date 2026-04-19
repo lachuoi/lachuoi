@@ -10,13 +10,15 @@ pub struct ScheduledTask {
     pub name: String,
     pub cron_expr: String,
     pub timezone: Tz,
+    pub task_type: String,
+    pub payload: Option<String>,
     pub schedule: Schedule,
     pub last_run: Option<DateTime<Tz>>,
     pub enabled: bool,
 }
 
 impl ScheduledTask {
-    // Create a new task from a cron expression string and a timezone string
+    // Create a new native task
     pub fn new(
         name: &str,
         cron_expr: &str,
@@ -33,9 +35,50 @@ impl ScheduledTask {
             name: name.to_string(),
             cron_expr: cron_expr.to_string(),
             timezone,
+            task_type: "native".to_string(),
+            payload: None,
             schedule,
             last_run: None,
             enabled: true,
+        })
+    }
+
+    // Create a new WASM task
+    pub fn new_wasm(
+        name: &str,
+        cron_expr: &str,
+        timezone_str: &str,
+        wasm_path: &str,
+    ) -> Result<Self, String> {
+        let mut task = Self::new(name, cron_expr, timezone_str)?;
+        task.task_type = "wasm".to_string();
+        task.payload = Some(wasm_path.to_string());
+        Ok(task)
+    }
+
+    // Constructor for loading from DB
+    pub fn from_db(
+        id: Uuid,
+        name: String,
+        cron_expr: String,
+        timezone: Tz,
+        task_type: String,
+        payload: Option<String>,
+        enabled: bool,
+    ) -> Result<Self, String> {
+        let schedule = Schedule::from_str(&cron_expr)
+            .map_err(|e| format!("Invalid cron expression: {}", e))?;
+
+        Ok(Self {
+            id,
+            name,
+            cron_expr,
+            timezone,
+            task_type,
+            payload,
+            schedule,
+            last_run: None,
+            enabled,
         })
     }
 
@@ -53,13 +96,11 @@ impl ScheduledTask {
         let now = Utc::now().with_timezone(&self.timezone);
 
         // Find the most recent scheduled time
-        // We look back 1 minute to see if a scheduled time occurred
         if let Some(upcoming) = self
             .schedule
             .after(&(now - Duration::minutes(1)))
             .next()
         {
-            // Task should run if we're within the same minute as a scheduled time
             return upcoming <= now;
         }
 

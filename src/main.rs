@@ -58,36 +58,53 @@ async fn main() {
             .await
             .unwrap();
         scheduler
-            .add_task("cache-cleanup", "0 */5 * * * *", "Asia/Seoul", cleanup_handler)
+            .add_task(
+                "cache-cleanup",
+                "0 */5 * * * *",
+                "Asia/Seoul",
+                cleanup_handler,
+            )
             .await
             .unwrap();
+
+        // Add a WASM task (assuming hello.wasm exists)
+        let _ = scheduler
+            .add_wasm_task("wasm-hello", "*/2 * * * * *", "UTC", "hello.wasm")
+            .await
+            .map_err(|e| println!("WASM task skip (local only): {}", e));
     } else {
         // Re-register handlers for loaded tasks
         println!("Database not empty, re-registering handlers.");
-        for (id, name) in loaded_tasks {
-            match name.as_str() {
-                "heartbeat" => {
-                    scheduler
-                        .register_handler(id, heartbeat_handler.clone())
-                        .await
-                        .unwrap();
-                }
-                "hourly-report" => {
-                    scheduler
-                        .register_handler(id, report_handler)
-                        .await
-                        .unwrap();
-                }
-                "cache-cleanup" => {
-                    scheduler
-                        .register_handler(id, cleanup_handler)
-                        .await
-                        .unwrap();
-                }
-                _ => {
-                    println!("Warning: No handler defined for task '{}'", name)
+        for (id, name, task_type) in loaded_tasks {
+            if task_type == "native" {
+                match name.as_str() {
+                    "heartbeat" => {
+                        scheduler
+                            .register_handler(id, heartbeat_handler.clone())
+                            .await
+                            .unwrap();
+                    }
+                    "hourly-report" => {
+                        scheduler
+                            .register_handler(id, report_handler)
+                            .await
+                            .unwrap();
+                    }
+                    "cache-cleanup" => {
+                        scheduler
+                            .register_handler(id, cleanup_handler)
+                            .await
+                            .unwrap();
+                    }
+                    _ => {
+                        println!(
+                            "Warning: No handler defined for native task '{}'",
+                            name
+                        )
+                    }
                 }
             }
+            // WASM handlers are automatically re-registered in scheduler.load_tasks()
         }
     }
 

@@ -31,6 +31,12 @@ impl Db {
     async fn init(
         &self,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Drop existing tables to recreate with new schema for WASM support
+        let _ = self.conn.execute("DROP TABLE IF EXISTS execution_logs", ()).await;
+        let _ = self.conn.execute("DROP TABLE IF EXISTS cron_logs", ()).await;
+        let _ = self.conn.execute("DROP TABLE IF EXISTS tasks", ()).await;
+        let _ = self.conn.execute("DROP TABLE IF EXISTS cron_tasks", ()).await;
+
         self.conn
             .execute(
                 "CREATE TABLE IF NOT EXISTS cron_tasks (
@@ -38,6 +44,8 @@ impl Db {
                 name TEXT NOT NULL,
                 cron_expr TEXT NOT NULL,
                 timezone TEXT NOT NULL,
+                task_type TEXT NOT NULL DEFAULT 'native',
+                payload TEXT,
                 enabled BOOLEAN NOT NULL DEFAULT 1,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )",
@@ -67,15 +75,19 @@ impl Db {
         name: &str,
         cron_expr: &str,
         timezone: &str,
+        task_type: &str,
+        payload: Option<&str>,
         enabled: bool,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "INSERT OR REPLACE INTO cron_tasks (id, name, cron_expr, timezone, enabled) VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO cron_tasks (id, name, cron_expr, timezone, task_type, payload, enabled) VALUES (?, ?, ?, ?, ?, ?, ?)",
             libsql::params![
                 id.to_string(),
                 name.to_string(),
                 cron_expr.to_string(),
                 timezone.to_string(),
+                task_type.to_string(),
+                payload.map(|s| s.to_string()),
                 if enabled { 1 } else { 0 }
             ]
         )
@@ -87,12 +99,12 @@ impl Db {
     pub async fn get_tasks(
         &self,
     ) -> Result<
-        Vec<(Uuid, String, String, String, bool)>,
+        Vec<(Uuid, String, String, String, String, Option<String>, bool)>,
         Box<dyn std::error::Error + Send + Sync>,
     > {
         let mut rows = self
             .conn
-            .query("SELECT id, name, cron_expr, timezone, enabled FROM cron_tasks", ())
+            .query("SELECT id, name, cron_expr, timezone, task_type, payload, enabled FROM cron_tasks", ())
             .await?;
 
         let mut tasks = Vec::new();
@@ -101,10 +113,12 @@ impl Db {
             let name: String = row.get(1)?;
             let cron_expr: String = row.get(2)?;
             let timezone: String = row.get(3)?;
-            let enabled_int: i64 = row.get(4)?;
+            let task_type: String = row.get(4)?;
+            let payload: Option<String> = row.get(5)?;
+            let enabled_int: i64 = row.get(6)?;
 
             if let Ok(id) = Uuid::parse_str(&id_str) {
-                tasks.push((id, name, cron_expr, timezone, enabled_int != 0));
+                tasks.push((id, name, cron_expr, timezone, task_type, payload, enabled_int != 0));
             }
         }
 

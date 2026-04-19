@@ -11,3 +11,5 @@ uuid = { version = "1.23.1", features = ["v4"] }
 libsql = { version = "0.6.0", features = ["remote"] }
 dotenvy = "0.15.7"
 chrono-tz = "0.10.0"
+wasmtime = "29.0.0"
+wasmtime-wasi = "29.0.0"
