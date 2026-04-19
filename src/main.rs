@@ -6,11 +6,13 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use task_scheduler::config::AppConfig;
 use task_scheduler::db::Db;
 use task_scheduler::scheduler::Scheduler;
+use task_scheduler::web::WebServer;
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
 
+    // 1. Initialize Database
     let db_url = std::env::var("TURSO_DATABASE_URL")
         .unwrap_or_else(|_| "tasks.db".to_string());
     let auth_token = std::env::var("TURSO_AUTH_TOKEN").ok();
@@ -18,9 +20,11 @@ async fn main() {
     let db = Db::new(&db_url, auth_token.as_deref())
         .await
         .expect("Failed to initialize database");
-    let scheduler = Scheduler::new(db.clone());
+    
+    // 2. Initialize Scheduler
+    let scheduler = Arc::new(Scheduler::new(db.clone()));
 
-    // 1. Register native handlers
+    // 3. Define and register native handlers
     let counter = Arc::new(AtomicU32::new(0));
     let counter_clone = Arc::clone(&counter);
     let mut native_handlers: HashMap<String, Arc<dyn Fn() + Send + Sync>> = HashMap::new();
@@ -38,18 +42,21 @@ async fn main() {
         println!("[{}] Cleaning up cache...", Utc::now().format("%H:%M:%S"));
     }));
 
-    // 2. Load current state from DB
+    // 4. Load state and sync with configuration
     let _ = scheduler.load_tasks().await.expect("Failed to load tasks from DB");
 
-    // 3. Always sync with cron.toml (Source of Truth)
     if std::path::Path::new("cron.toml").exists() {
         println!("Syncing with cron.toml...");
         let config = AppConfig::load("cron.toml").expect("Failed to load cron.toml");
-        scheduler.sync_with_config(&config, native_handlers).await.expect("Failed to sync config");
-    } else {
-        println!("cron.toml not found, running with existing database tasks.");
+        scheduler.sync_with_config(&config, &native_handlers).await.expect("Failed to sync config");
     }
 
-    // 4. Start the scheduler
-    scheduler.start().await;
+    // 5. Start the scheduler background loop
+    scheduler.clone().start().await;
+
+    // 6. Start the web server (blocking)
+    let web_server = WebServer::new(Arc::clone(&scheduler), 3000);
+    if let Err(e) = web_server.run().await {
+        eprintln!("Web server error: {}", e);
+    }
 }

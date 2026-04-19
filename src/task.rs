@@ -3,6 +3,19 @@ use chrono_tz::Tz;
 use cron::Schedule;
 use std::str::FromStr;
 use uuid::Uuid;
+use serde::Serialize;
+
+#[derive(Serialize)]
+pub struct TaskStatus {
+    pub id: Uuid,
+    pub name: String,
+    pub cron: String,
+    pub timezone: String,
+    pub task_type: String,
+    pub last_run: Option<String>,
+    pub last_duration_ms: Option<u128>,
+    pub enabled: bool,
+}
 
 // Represents a scheduled task with its cron schedule and execution logic
 pub struct ScheduledTask {
@@ -14,6 +27,7 @@ pub struct ScheduledTask {
     pub payload: Option<String>,
     pub schedule: Schedule,
     pub last_run: Option<DateTime<Tz>>,
+    pub last_duration: Option<u128>,
     pub enabled: bool,
 }
 
@@ -39,6 +53,7 @@ impl ScheduledTask {
             payload: None,
             schedule,
             last_run: None,
+            last_duration: None,
             enabled: true,
         })
     }
@@ -78,6 +93,7 @@ impl ScheduledTask {
             payload,
             schedule,
             last_run: None,
+            last_duration: None,
             enabled,
         })
     }

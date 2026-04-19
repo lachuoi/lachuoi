@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
+    <title>Login - Cron Scheduler</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --panel: #1e293b;
+            --text: #f8fafc;
+            --accent: #38bdf8;
+            --border: #334155;
+        }
+
+        body { 
+            font-family: 'Inter', system-ui, sans-serif; 
+            margin: 0; 
+            background: var(--bg); 
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        .login-card {
+            background: var(--panel);
+            padding: 40px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        h1 { margin-bottom: 24px; font-size: 1.5rem; }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 16px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: white;
+            box-sizing: border-box;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: var(--bg);
+            border: none;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover { opacity: 0.9; }
+
+        .footer { margin-top: 20px; color: #94a3b8; font-size: 0.85rem; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h1>Cron Scheduler</h1>
+        <form action="/task-status" method="get">
+            <input type="text" placeholder="Username" required>
+            <input type="password" placeholder="Password" required>
+            <button type="submit">Login</button>
+        </form>
+        <div class="footer">Secure Access Required</div>
+    </div>
+</body>
+</html>

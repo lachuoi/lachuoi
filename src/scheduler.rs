@@ -44,14 +44,31 @@ impl Scheduler {
         self.plugins_dir = std::path::PathBuf::from(path);
     }
 
+    // Get status of all tasks
+    pub async fn get_tasks_status(&self) -> Vec<crate::task::TaskStatus> {
+        let tasks = self.tasks.read().await;
+        tasks.values()
+            .map(|t| crate::task::TaskStatus {
+                id: t.id,
+                name: t.name.clone(),
+                cron: t.cron_expr.clone(),
+                timezone: t.timezone.to_string(),
+                task_type: t.task_type.clone(),
+                last_run: t.last_run.map(|dt| dt.to_rfc3339()),
+                last_duration_ms: t.last_duration,
+                enabled: t.enabled,
+            })
+            .collect()
+    }
+
     // Sync tasks with configuration
     pub async fn sync_with_config(
         &self,
         config: &crate::config::AppConfig,
-        native_handlers: HashMap<String, Arc<dyn Fn() + Send + Sync>>,
+        native_handlers: &HashMap<String, Arc<dyn Fn() + Send + Sync>>,
     ) -> Result<(), String> {
         // 1. Map existing tasks by name
-        let mut existing_by_name = {
+        let existing_by_name = {
             let tasks = self.tasks.read().await;
             tasks.values()
                 .map(|t| (t.name.clone(), (t.id, t.task_type.clone())))
@@ -270,21 +287,26 @@ impl Scheduler {
         }
     }
 
-    // Start the scheduler - runs until stop() is called
-    pub async fn start(&self) {
+    // Start the scheduler - runs in the background
+    pub async fn start(self: Arc<Self>) {
         *self.running.write().await = true;
 
-        // Check for tasks to run every second
-        let mut ticker = interval(Duration::from_secs(1));
+        let scheduler = Arc::clone(&self);
+        tokio::spawn(async move {
+            // Check for tasks to run every second
+            let mut ticker = interval(Duration::from_secs(1));
 
+            println!("Scheduler background loop started");
+
+            while *scheduler.running.read().await {
+                ticker.tick().await;
+                scheduler.tick().await;
+            }
+
+            println!("Scheduler background loop stopped");
+        });
+        
         println!("Scheduler started");
-
-        while *self.running.read().await {
-            ticker.tick().await;
-            self.tick().await;
-        }
-
-        println!("Scheduler stopped");
     }
 
     // Stop the scheduler gracefully
@@ -326,6 +348,7 @@ impl Scheduler {
             if let Some(handler) = handlers.get(&task_id) {
                 let handler = Arc::clone(handler);
                 let db = self.db.clone();
+                let tasks_ref = Arc::clone(&self.tasks);
 
                 tokio::spawn(async move {
                     if let Ok(log_id) = db.log_execution_start(task_id).await {
@@ -333,6 +356,12 @@ impl Scheduler {
                         handler();
                         let duration = start.elapsed().as_millis();
                         let _ = db.log_execution_finish(log_id, duration).await;
+                        
+                        // Update in-memory duration
+                        let mut tasks = tasks_ref.write().await;
+                        if let Some(task) = tasks.get_mut(&task_id) {
+                            task.last_duration = Some(duration);
+                        }
                     }
                 });
             }
