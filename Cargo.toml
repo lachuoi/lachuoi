@@ -16,4 +16,8 @@ wasmtime-wasi = "29.0.0"
 wasmtime-wasi-http = "29.0.0"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
-axum = "0.7.9"
+axum = { version = "0.7.9", features = ["macros"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures-util = "0.3"
+os_pipe = "1.2"
+gag = "1.0"

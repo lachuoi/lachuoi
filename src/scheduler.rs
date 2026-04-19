@@ -34,6 +34,48 @@ use crate::db::Db;
 // Type alias for task handlers - functions that execute when a task runs
 type TaskHandler = Arc<dyn Fn() + Send + Sync>;
 
+use wasmtime_wasi::pipe::MemoryOutputPipe;
+
+use std::io::{Read, Write};
+
+struct LogRedirector;
+
+impl LogRedirector {
+    fn start(sender: tokio::sync::broadcast::Sender<String>) {
+        let (reader, writer) = os_pipe::pipe().expect("Failed to create pipe");
+        let original_stdout = gag::Redirect::stdout(writer).expect("Failed to redirect stdout");
+        
+        let sender_clone = sender.clone();
+        std::thread::spawn(move || {
+            let _keep_alive = original_stdout;
+            let mut reader = reader;
+            let mut buf = [0u8; 1024];
+            let mut line_buf = Vec::new();
+            
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => {
+                        // Print to stderr so we still see it in console
+                        let _ = std::io::stderr().write_all(&buf[..n]);
+                        
+                        for &byte in &buf[..n] {
+                            if byte == b'\n' {
+                                let line = String::from_utf8_lossy(&line_buf).to_string();
+                                let _ = sender_clone.send(line);
+                                line_buf.clear();
+                            } else {
+                                line_buf.push(byte);
+                            }
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
+    }
+}
+
 pub struct Scheduler {
     tasks: Arc<RwLock<HashMap<Uuid, ScheduledTask>>>,
     handlers: Arc<RwLock<HashMap<Uuid, TaskHandler>>>,
@@ -41,6 +83,7 @@ pub struct Scheduler {
     db: Db,
     wasm_engine: Engine,
     plugins_dir: std::path::PathBuf,
+    log_sender: tokio::sync::broadcast::Sender<String>,
 }
 
 impl Scheduler {
@@ -49,6 +92,9 @@ impl Scheduler {
         config.async_support(true);
         config.wasm_component_model(true);
         let wasm_engine = Engine::new(&config).expect("Failed to create Wasmtime engine");
+        let (log_sender, _) = tokio::sync::broadcast::channel(100);
+
+        LogRedirector::start(log_sender.clone());
 
         Self {
             tasks: Arc::new(RwLock::new(HashMap::new())),
@@ -57,7 +103,12 @@ impl Scheduler {
             db,
             wasm_engine,
             plugins_dir: std::path::PathBuf::from("plugins"),
+            log_sender,
         }
+    }
+
+    pub fn subscribe_logs(&self) -> tokio::sync::broadcast::Receiver<String> {
+        self.log_sender.subscribe()
     }
 
     pub fn set_plugins_dir(&mut self, path: &str) {
@@ -193,11 +244,12 @@ impl Scheduler {
         };
         
         let path_for_error = wasm_path.clone();
+        let log_sender = self.log_sender.clone();
         let handler = move || {
             let engine = engine.clone();
             let path = full_path.clone();
             let err_path = path_for_error.clone();
-            
+
             tokio::spawn(async move {
                 if let Err(e) = Self::run_wasm_file(&engine, path.to_str().unwrap_or(&err_path)).await {
                     eprintln!("Error executing WASM task: {}", e);
@@ -207,68 +259,70 @@ impl Scheduler {
 
         self.handlers.write().await.insert(task_id, Arc::new(handler));
         Ok(())
-    }
+        }
 
-    async fn run_wasm_file(engine: &Engine, path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        async fn run_wasm_file(engine: &Engine, path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let binary = std::fs::read(path)?;
-        
+
         // Check if it's a WASM component (starts with \0asm and version 0x0d)
         if binary.starts_with(&[0, 0x61, 0x73, 0x6d, 0x0d, 0, 1, 0]) {
             Self::run_wasm_component(engine, &binary).await
         } else {
             Self::run_wasm_module(engine, &binary).await
         }
-    }
+        }
 
-    async fn run_wasm_module(engine: &Engine, binary: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        async fn run_wasm_module(engine: &Engine, binary: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let module = Module::from_binary(engine, binary)?;
-        
+
         struct MyState {
             wasi: WasiP1Ctx,
         }
-        
+
         let mut linker = Linker::new(engine);
         preview1::add_to_linker_async(&mut linker, |state: &mut MyState| &mut state.wasi)?;
-        
+
         let wasi = WasiCtxBuilder::new()
             .inherit_stdout()
             .inherit_stderr()
             .build_p1();
-            
+
         let mut store = Store::new(engine, MyState { wasi });
-        
+
         let instance = linker.instantiate_async(&mut store, &module).await?;
         let func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
-        
-        func.call_async(&mut store, ()).await?;
-        
-        Ok(())
-    }
 
-    async fn run_wasm_component(engine: &Engine, binary: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        func.call_async(&mut store, ()).await?;
+        Ok(())
+        }
+
+        async fn run_wasm_component(engine: &Engine, binary: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let component = Component::from_binary(engine, binary)?;
-        
+
         let mut linker = ComponentLinker::new(engine);
         wasmtime_wasi::add_to_linker_async(&mut linker)?;
         add_http_to_linker(&mut linker)?;
-        
+
         let wasi = WasiCtxBuilder::new()
             .inherit_stdout()
             .inherit_stderr()
             .inherit_network()
             .allow_ip_name_lookup(true)
             .build();
-            
+
         let http = WasiHttpCtx::new();
         let table = ResourceTable::new();
-        
+
         let mut store = Store::new(engine, ComponentState { wasi, http, table });
-        
+
         let command = Command::instantiate_async(&mut store, &component, &linker).await?;
-        command.wasi_cli_run().call_run(&mut store).await?.map_err(|()| Box::<dyn std::error::Error + Send + Sync>::from("WASI run failed"))?;
-        
+        let result = command.wasi_cli_run().call_run(&mut store).await;
+
+        result?.map_err(|()| Box::<dyn std::error::Error + Send + Sync>::from("WASI run failed"))?;
+
         Ok(())
-    }
+        }
+
 
     // Register a handler for a specific task ID
     pub async fn register_handler<F>(&self, task_id: Uuid, handler: F) -> Result<(), String>

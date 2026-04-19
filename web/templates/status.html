@@ -70,6 +70,36 @@
 
         .time-cell { color: var(--text-muted); font-family: tabular-nums; }
         .duration { font-size: 0.8em; color: var(--accent); margin-left: 4px; }
+
+        .logs-container {
+            margin-top: 30px;
+            background: #020617;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 20px;
+        }
+        .logs-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        #logs {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: #cbd5e1;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        .log-entry { margin-bottom: 4px; }
+        .log-time { color: #64748b; margin-right: 10px; }
         </style>
 
 </head>
@@ -98,6 +128,46 @@
                 </tbody>
             </table>
         </div>
+
+        <div class="logs-container">
+            <div class="logs-header">
+                Task Logs (Live)
+                <span id="status-indicator" style="font-size: 0.7rem; color: var(--text-muted);">Connecting...</span>
+            </div>
+            <div id="logs"></div>
+        </div>
     </div>
+
+    <script>
+        const logsDiv = document.getElementById('logs');
+        const statusIndicator = document.getElementById('status-indicator');
+        const eventSource = new EventSource('/events');
+
+        eventSource.onmessage = (event) => {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            const time = new Date().toLocaleTimeString();
+            entry.innerHTML = `<span class="log-time">[${time}]</span> ${event.data}`;
+            
+            logsDiv.appendChild(entry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+
+            // Keep only last 1000 lines
+            while (logsDiv.childNodes.length > 1000) {
+                logsDiv.removeChild(logsDiv.firstChild);
+            }
+        };
+
+        eventSource.onopen = () => {
+            statusIndicator.innerText = 'Connected';
+            statusIndicator.style.color = 'var(--success)';
+        };
+
+        eventSource.onerror = () => {
+            statusIndicator.innerText = 'Disconnected - retrying...';
+            statusIndicator.style.color = 'var(--danger)';
+        };
+    </script>
 </body>
 </html>

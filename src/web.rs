@@ -1,8 +1,11 @@
-use axum::{routing::get, Json, Router, extract::State, response::Html};
+use axum::{routing::get, Json, Router, extract::State, response::Html, response::sse::{Event, Sse}};
 use std::sync::Arc;
 use std::net::SocketAddr;
 use crate::scheduler::Scheduler;
 use crate::task::TaskStatus;
+use tokio_stream::StreamExt;
+use futures_util::stream::Stream;
+use std::convert::Infallible;
 
 pub struct WebServer {
     scheduler: Arc<Scheduler>,
@@ -20,6 +23,7 @@ impl WebServer {
             .route("/", get(login_page_handler))
             .route("/task-status", get(status_page_handler))
             .route("/tasks", get(get_tasks_handler))
+            .route("/events", get(events_handler))
             .with_state(self.scheduler);
 
         println!("Web server listening on http://{}", self.addr);
@@ -27,6 +31,26 @@ impl WebServer {
         axum::serve(listener, app).await?;
         Ok(())
     }
+}
+
+async fn events_handler(
+    State(scheduler): State<Arc<Scheduler>>,
+) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let rx = scheduler.subscribe_logs();
+    
+    let initial_msg = futures_util::stream::once(async {
+        Ok(Event::default().data("Log stream connected"))
+    });
+
+    let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
+        .map(|msg| {
+            match msg {
+                Ok(text) => Ok(Event::default().data(text)),
+                Err(_) => Ok(Event::default().data("... (log buffer overflowed)")),
+            }
+        });
+
+    Sse::new(initial_msg.chain(stream)).keep_alive(axum::response::sse::KeepAlive::default())
 }
 
 async fn get_tasks_handler(State(scheduler): State<Arc<Scheduler>>) -> Json<Vec<TaskStatus>> {
