@@ -31,14 +31,14 @@ impl AsyncScheduler {
         &self,
         name: &str,
         cron_expr: &str,
+        timezone: &str,
         handler: F,
     ) -> Result<Uuid, String>
     where
         F: Fn() -> Fut + Send + Sync + 'static,
         Fut: Future<Output = ()> + Send + 'static,
     {
-        let task = ScheduledTask::new(name, cron_expr)
-            .map_err(|e| format!("Invalid cron expression: {}", e))?;
+        let task = ScheduledTask::new(name, cron_expr, timezone)?;
 
         let task_id = task.id;
 
