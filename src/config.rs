@@ -18,6 +18,7 @@ pub struct TaskConfig {
     pub task_type: String,
     pub payload: Option<String>,
     pub args: Option<Vec<String>>,
+    pub sha256: Option<String>,
 }
 
 fn default_timezone() -> String {

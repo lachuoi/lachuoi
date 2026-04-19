@@ -16,6 +16,7 @@ cron = "*/2 * * * * *"
 timezone = "UTC"
 type = "wasm"
 payload = "hello.wasm"
+sha256 = "2e45e356ee4a7587927d61a898e493af8507a26dc6c05413898100e90dc39239"
 
 [[task]]
 name = "weather-station"
@@ -30,8 +31,25 @@ cron = "* * * * * *"
 timezone = "Asia/Seoul"
 type = "wasm"
 payload = "ssh.wasm"
+sha256 = "ad677d5c7c136f862aed95f61879d0b0bb80cfb6f99212b7a7aada581b50f70c"
 args = [
   "1.ctb.seungjin.net",
+  "432",
+  "seungjin",
+  "file:~/.ssh/id_ed25519",
+  "hostname",
+  "key",
+]
+
+[[task]]
+name = "ssh bar"
+cron = "* * * * * *"
+timezone = "Asia/Seoul"
+type = "wasm"
+payload = "ssh.wasm"
+sha256 = "ad677d5c7c136f862aed95f61879d0b0bb80cfb6f99212b7a7aada581b50f70c"
+args = [
+  "0.zap.seungjin.net",
   "432",
   "seungjin",
   "file:~/.ssh/id_ed25519",

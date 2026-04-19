@@ -11,6 +11,8 @@ use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder, ResourceTable, Subscribe}
 use wasmtime_wasi::bindings::Command;
 use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView, add_only_http_to_linker_async as add_http_to_linker};
 use chrono_tz::Tz;
+use sha2::{Sha256, Digest};
+use std::io::BufReader;
 
 struct ComponentState {
     wasi: WasiCtx,
@@ -137,6 +139,23 @@ impl Scheduler {
         self.plugins_dir = std::path::PathBuf::from(path);
     }
 
+    fn calculate_sha256(path: &std::path::Path) -> Result<String, String> {
+        let file = std::fs::File::open(path).map_err(|e| format!("Failed to open file for checksum: {}", e))?;
+        let mut reader = BufReader::new(file);
+        let mut hasher = Sha256::new();
+        
+        use std::io::Read;
+        let mut buffer = [0; 8192];
+        loop {
+            let count = reader.read(&mut buffer).map_err(|e| format!("Failed to read file for checksum: {}", e))?;
+            if count == 0 { break; }
+            hasher.update(&buffer[..count]);
+        }
+        
+        let result = hasher.finalize();
+        Ok(result.iter().map(|b| format!("{:02x}", b)).collect())
+    }
+
     // Get status of all tasks
     pub async fn get_tasks_status(&self) -> Vec<crate::task::TaskStatus> {
         let tasks = self.tasks.read().await;
@@ -188,7 +207,7 @@ impl Scheduler {
                         let mut task = ScheduledTask::new(&task_cfg.name, &task_cfg.cron, &task_cfg.timezone)?;
                         task.id = task_id; // Preserve ID if updating
 
-                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "native", None, None, true).await
+                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "native", None, None, None, true).await
                             .map_err(|e| format!("Failed to save task: {}", e))?;
 
                         self.tasks.write().await.insert(task_id, task);
@@ -199,14 +218,14 @@ impl Scheduler {
                 }
                 "wasm" => {
                     if let Some(payload) = &task_cfg.payload {
-                        let mut task = ScheduledTask::new_wasm(&task_cfg.name, &task_cfg.cron, &task_cfg.timezone, payload, task_cfg.args.clone())?;
+                        let mut task = ScheduledTask::new_wasm(&task_cfg.name, &task_cfg.cron, &task_cfg.timezone, payload, task_cfg.args.clone(), task_cfg.sha256.clone())?;
                         task.id = task_id;
 
-                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "wasm", Some(payload), task_cfg.args.clone(), true).await
+                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "wasm", Some(payload), task_cfg.args.clone(), task_cfg.sha256.as_deref(), true).await
                             .map_err(|e| format!("Failed to save task: {}", e))?;
 
                         self.tasks.write().await.insert(task_id, task);
-                        self.register_wasm_handler(task_id, payload.to_string(), task_cfg.name.clone(), task_cfg.args.clone()).await?;
+                        self.register_wasm_handler(task_id, payload.to_string(), task_cfg.name.clone(), task_cfg.args.clone(), task_cfg.sha256.clone()).await?;
                     }
                 }
                 _ => println!("Warning: Unknown task type '{}'", task_cfg.task_type),
@@ -235,11 +254,11 @@ impl Scheduler {
 
         let mut tasks = self.tasks.write().await;
         let mut loaded = Vec::new();
-        for (id, name, cron_expr, timezone_str, task_type, payload, args, enabled) in db_tasks {
+        for (id, name, cron_expr, timezone_str, task_type, payload, args, sha256, enabled) in db_tasks {
             let timezone = timezone_str.parse::<Tz>()
                 .map_err(|e| format!("Invalid timezone in DB: {}", e))?;
 
-            match ScheduledTask::from_db(id, name.clone(), cron_expr, timezone, task_type.clone(), payload.clone(), args.clone(), enabled) {
+            match ScheduledTask::from_db(id, name.clone(), cron_expr, timezone, task_type.clone(), payload.clone(), args.clone(), sha256.clone(), enabled) {
                 Ok(task) => {
                     tasks.insert(id, task);
                     loaded.push((id, name.clone(), task_type.clone()));
@@ -247,7 +266,7 @@ impl Scheduler {
                     // If it's a WASM task, automatically register its handler
                     if task_type == "wasm" {
                         if let Some(path) = payload {
-                            self.register_wasm_handler(id, path, name.clone(), args).await?;
+                            self.register_wasm_handler(id, path, name.clone(), args, sha256).await?;
                         }
                     }
                 }
@@ -299,7 +318,7 @@ impl Scheduler {
         Some(resolved)
     }
 
-    async fn register_wasm_handler(&self, task_id: Uuid, wasm_path: String, task_name: String, args: Option<Vec<String>>) -> Result<(), String> {
+    async fn register_wasm_handler(&self, task_id: Uuid, wasm_path: String, task_name: String, args: Option<Vec<String>>, expected_sha256: Option<String>) -> Result<(), String> {
         let engine = self.wasm_engine.clone();
         let full_path = if std::path::Path::new(&wasm_path).is_absolute() {
             std::path::PathBuf::from(&wasm_path)
@@ -315,8 +334,22 @@ impl Scheduler {
             let err_path = path_for_error.clone();
             let name = task_name.clone();
             let args = args.clone();
+            let expected_sha256 = expected_sha256.clone();
 
             Box::pin(async move {
+                // Verify SHA256 if expected
+                if let Some(expected) = expected_sha256 {
+                    match Self::calculate_sha256(&path) {
+                        Ok(actual) => {
+                            if actual != expected {
+                                let err_msg = format!("SHA256 mismatch for task '{}': expected {}, got {}", name, expected, actual);
+                                return Err(err_msg);
+                            }
+                        }
+                        Err(e) => return Err(format!("Checksum calculation failed for task '{}': {}", name, e)),
+                    }
+                }
+
                 let resolved_args = Self::resolve_args(args).await;
                 if let Err(e) = Self::run_wasm_file(&engine, path.to_str().unwrap_or(&err_path), &name, log_sender, resolved_args, log_id, db).await {
                     let err_msg = format!("Error executing WASM task: {}", e);
@@ -457,7 +490,7 @@ impl Scheduler {
         let task = ScheduledTask::new(name, cron_expr, timezone)?;
         let task_id = task.id;
 
-        self.db.save_task(task_id, name, cron_expr, timezone, "native", None, None, true).await
+        self.db.save_task(task_id, name, cron_expr, timezone, "native", None, None, None, true).await
             .map_err(|e| format!("Failed to save task to DB: {}", e))?;
 
         self.tasks.write().await.insert(task_id, task);
@@ -475,15 +508,16 @@ impl Scheduler {
         timezone: &str,
         wasm_path: &str,
         args: Option<Vec<String>>,
+        sha256: Option<String>,
     ) -> Result<Uuid, String> {
-        let task = ScheduledTask::new_wasm(name, cron_expr, timezone, wasm_path, args.clone())?;
+        let task = ScheduledTask::new_wasm(name, cron_expr, timezone, wasm_path, args.clone(), sha256.clone())?;
         let task_id = task.id;
 
-        self.db.save_task(task_id, name, cron_expr, timezone, "wasm", Some(wasm_path), args.clone(), true).await
+        self.db.save_task(task_id, name, cron_expr, timezone, "wasm", Some(wasm_path), args.clone(), sha256.as_deref(), true).await
             .map_err(|e| format!("Failed to save task to DB: {}", e))?;
 
         self.tasks.write().await.insert(task_id, task);
-        self.register_wasm_handler(task_id, wasm_path.to_string(), name.to_string(), args).await?;
+        self.register_wasm_handler(task_id, wasm_path.to_string(), name.to_string(), args, sha256).await?;
 
         println!("Registered WASM task '{}' [{}] with id {}", name, timezone, task_id);
         Ok(task_id)
@@ -525,6 +559,7 @@ impl Scheduler {
             while *scheduler.running.read().await {
                 ticker.tick().await;
                 scheduler.tick(Arc::clone(&self_arc)).await;
+                scheduler.broadcast_status().await;
             }
 
             println!("Scheduler background loop stopped");
@@ -575,7 +610,6 @@ impl Scheduler {
                 let tasks_ref = Arc::clone(&self.tasks);
                 let name = task_name.clone();
                 let log_sender = self.log_sender.clone();
-                let scheduler_ref = Arc::clone(&self_arc);
 
                 tokio::spawn(async move {
                     if let Ok(log_id) = db.log_execution_start(task_id).await {
@@ -612,9 +646,6 @@ impl Scheduler {
                                 task.last_failed = is_failed;
                             }
                         }
-                        
-                        // Broadcast updated status
-                        scheduler_ref.broadcast_status().await;
                     }
                 });
             }
