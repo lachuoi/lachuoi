@@ -1,0 +1,10 @@
+[package]
+name = "task-scheduler"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.4.44"
+cron = "0.16.0"
+tokio = { version = "1.52.1", features = ["full"] }
+uuid = { version = "1.23.1", features = ["v4"] }
