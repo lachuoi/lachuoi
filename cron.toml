@@ -16,3 +16,10 @@ cron = "*/2 * * * * *"
 timezone = "UTC"
 type = "wasm"
 payload = "hello.wasm"
+
+[[task]]
+name = "weather-station"
+cron = "*/2 * * * * *"
+timezone = "Asia/Seoul"
+type = "wasm"
+payload = "weather_station.wasm"

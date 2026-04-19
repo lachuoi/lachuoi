@@ -5,9 +5,28 @@ use tokio::sync::RwLock;
 use tokio::time::{Duration, interval};
 use uuid::Uuid;
 use wasmtime::*;
+use wasmtime::component::{Component, Linker as ComponentLinker};
 use wasmtime_wasi::preview1::{self, WasiP1Ctx};
-use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder, ResourceTable};
+use wasmtime_wasi::bindings::Command;
+use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView, add_only_http_to_linker_async as add_http_to_linker};
 use chrono_tz::Tz;
+
+struct ComponentState {
+    wasi: WasiCtx,
+    http: WasiHttpCtx,
+    table: ResourceTable,
+}
+
+impl WasiView for ComponentState {
+    fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+    fn ctx(&mut self) -> &mut WasiCtx { &mut self.wasi }
+}
+
+impl WasiHttpView for ComponentState {
+    fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+    fn ctx(&mut self) -> &mut WasiHttpCtx { &mut self.http }
+}
 
 use crate::task::ScheduledTask;
 use crate::db::Db;
@@ -28,6 +47,7 @@ impl Scheduler {
     pub fn new(db: Db) -> Self {
         let mut config = Config::new();
         config.async_support(true);
+        config.wasm_component_model(true);
         let wasm_engine = Engine::new(&config).expect("Failed to create Wasmtime engine");
 
         Self {
@@ -190,7 +210,18 @@ impl Scheduler {
     }
 
     async fn run_wasm_file(engine: &Engine, path: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let module = Module::from_file(engine, path)?;
+        let binary = std::fs::read(path)?;
+        
+        // Check if it's a WASM component (starts with \0asm and version 0x0d)
+        if binary.starts_with(&[0, 0x61, 0x73, 0x6d, 0x0d, 0, 1, 0]) {
+            Self::run_wasm_component(engine, &binary).await
+        } else {
+            Self::run_wasm_module(engine, &binary).await
+        }
+    }
+
+    async fn run_wasm_module(engine: &Engine, binary: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let module = Module::from_binary(engine, binary)?;
         
         struct MyState {
             wasi: WasiP1Ctx,
@@ -210,6 +241,31 @@ impl Scheduler {
         let func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
         
         func.call_async(&mut store, ()).await?;
+        
+        Ok(())
+    }
+
+    async fn run_wasm_component(engine: &Engine, binary: &[u8]) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let component = Component::from_binary(engine, binary)?;
+        
+        let mut linker = ComponentLinker::new(engine);
+        wasmtime_wasi::add_to_linker_async(&mut linker)?;
+        add_http_to_linker(&mut linker)?;
+        
+        let wasi = WasiCtxBuilder::new()
+            .inherit_stdout()
+            .inherit_stderr()
+            .inherit_network()
+            .allow_ip_name_lookup(true)
+            .build();
+            
+        let http = WasiHttpCtx::new();
+        let table = ResourceTable::new();
+        
+        let mut store = Store::new(engine, ComponentState { wasi, http, table });
+        
+        let command = Command::instantiate_async(&mut store, &component, &linker).await?;
+        command.wasi_cli_run().call_run(&mut store).await?.map_err(|()| Box::<dyn std::error::Error + Send + Sync>::from("WASI run failed"))?;
         
         Ok(())
     }
