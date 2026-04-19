@@ -44,6 +44,79 @@ impl Scheduler {
         self.plugins_dir = std::path::PathBuf::from(path);
     }
 
+    // Sync tasks with configuration
+    pub async fn sync_with_config(
+        &self,
+        config: &crate::config::AppConfig,
+        native_handlers: HashMap<String, Arc<dyn Fn() + Send + Sync>>,
+    ) -> Result<(), String> {
+        // 1. Map existing tasks by name
+        let mut existing_by_name = {
+            let tasks = self.tasks.read().await;
+            tasks.values()
+                .map(|t| (t.name.clone(), (t.id, t.task_type.clone())))
+                .collect::<HashMap<String, (Uuid, String)>>()
+        };
+
+        let mut config_names = std::collections::HashSet::new();
+
+        // 2. Add or Update tasks from config
+        for task_cfg in &config.tasks {
+            config_names.insert(task_cfg.name.clone());
+            
+            let task_id = if let Some((id, _)) = existing_by_name.get(&task_cfg.name) {
+                *id
+            } else {
+                Uuid::new_v4()
+            };
+
+            match task_cfg.task_type.as_str() {
+                "native" => {
+                    if let Some(handler) = native_handlers.get(&task_cfg.name) {
+                        let handler = Arc::clone(handler);
+                        let mut task = ScheduledTask::new(&task_cfg.name, &task_cfg.cron, &task_cfg.timezone)?;
+                        task.id = task_id; // Preserve ID if updating
+
+                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "native", None, true).await
+                            .map_err(|e| format!("Failed to save task: {}", e))?;
+
+                        self.tasks.write().await.insert(task_id, task);
+                        self.register_handler(task_id, move || handler()).await?;
+                    } else {
+                        println!("Warning: No native handler found for task '{}'", task_cfg.name);
+                    }
+                }
+                "wasm" => {
+                    if let Some(payload) = &task_cfg.payload {
+                        let mut task = ScheduledTask::new_wasm(&task_cfg.name, &task_cfg.cron, &task_cfg.timezone, payload)?;
+                        task.id = task_id;
+
+                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "wasm", Some(payload), true).await
+                            .map_err(|e| format!("Failed to save task: {}", e))?;
+
+                        self.tasks.write().await.insert(task_id, task);
+                        self.register_wasm_handler(task_id, payload.to_string()).await?;
+                    }
+                }
+                _ => println!("Warning: Unknown task type '{}'", task_cfg.task_type),
+            }
+        }
+
+        // 3. Remove tasks that are in DB but NOT in config
+        let to_remove: Vec<Uuid> = existing_by_name
+            .iter()
+            .filter(|(name, _)| !config_names.contains(*name))
+            .map(|(_, (id, _))| *id)
+            .collect();
+
+        for id in to_remove {
+            println!("Removing task {} (not in config)", id);
+            self.remove_task(id).await;
+        }
+
+        Ok(())
+    }
+
     // Load tasks from the database
     pub async fn load_tasks(&self) -> Result<Vec<(Uuid, String, String)>, String> {
         let db_tasks = self.db.get_tasks().await

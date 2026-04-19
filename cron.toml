@@ -1,0 +1,18 @@
+[[task]]
+name = "heartbeat"
+cron = "0 * * * * *"
+timezone = "UTC"
+type = "native"
+
+[[task]]
+name = "cache-cleanup"
+cron = "0 */5 * * * *"
+timezone = "Asia/Seoul"
+type = "native"
+
+[[task]]
+name = "wasm-hello"
+cron = "*/2 * * * * *"
+timezone = "UTC"
+type = "wasm"
+payload = "hello.wasm"

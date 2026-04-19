@@ -1,7 +1,9 @@
 use chrono::Utc;
 use dotenvy::dotenv;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
+use task_scheduler::config::AppConfig;
 use task_scheduler::db::Db;
 use task_scheduler::scheduler::Scheduler;
 
@@ -18,96 +20,36 @@ async fn main() {
         .expect("Failed to initialize database");
     let scheduler = Scheduler::new(db.clone());
 
-    // Load tasks from database
-    let loaded_tasks =
-        scheduler.load_tasks().await.expect("Failed to load tasks");
-
-    // Counter to track executions
+    // 1. Register native handlers
     let counter = Arc::new(AtomicU32::new(0));
     let counter_clone = Arc::clone(&counter);
+    let mut native_handlers: HashMap<String, Arc<dyn Fn() + Send + Sync>> = HashMap::new();
 
-    // Define handlers once
-    let heartbeat_handler = move || {
+    native_handlers.insert("heartbeat".to_string(), Arc::new(move || {
         let count = counter_clone.fetch_add(1, Ordering::SeqCst);
-        println!(
-            "[{}] Heartbeat #{}",
-            Utc::now().format("%H:%M:%S"),
-            count + 1
-        );
-    };
+        println!("[{}] Heartbeat #{}", Utc::now().format("%H:%M:%S"), count + 1);
+    }));
 
-    let report_handler = || {
-        println!(
-            "[{}] Generating hourly report...",
-            Utc::now().format("%H:%M:%S")
-        );
-    };
+    native_handlers.insert("hourly-report".to_string(), Arc::new(|| {
+        println!("[{}] Generating hourly report...", Utc::now().format("%H:%M:%S"));
+    }));
 
-    let cleanup_handler = || {
+    native_handlers.insert("cache-cleanup".to_string(), Arc::new(|| {
         println!("[{}] Cleaning up cache...", Utc::now().format("%H:%M:%S"));
-    };
+    }));
 
-    if loaded_tasks.is_empty() {
-        // Initial setup: add tasks and register handlers with timezones
-        scheduler
-            .add_task("heartbeat", "0 * * * * *", "UTC", heartbeat_handler)
-            .await
-            .unwrap();
-        scheduler
-            .add_task("hourly-report", "0 0 * * * *", "UTC", report_handler)
-            .await
-            .unwrap();
-        scheduler
-            .add_task(
-                "cache-cleanup",
-                "0 */5 * * * *",
-                "Asia/Seoul",
-                cleanup_handler,
-            )
-            .await
-            .unwrap();
+    // 2. Load current state from DB
+    let _ = scheduler.load_tasks().await.expect("Failed to load tasks from DB");
 
-        // Add a WASM task (assuming hello.wasm exists)
-        let _ = scheduler
-            .add_wasm_task("wasm-hello", "*/2 * * * * *", "UTC", "hello.wasm")
-            .await
-            .map_err(|e| println!("WASM task skip (local only): {}", e));
+    // 3. Always sync with cron.toml (Source of Truth)
+    if std::path::Path::new("cron.toml").exists() {
+        println!("Syncing with cron.toml...");
+        let config = AppConfig::load("cron.toml").expect("Failed to load cron.toml");
+        scheduler.sync_with_config(&config, native_handlers).await.expect("Failed to sync config");
     } else {
-        // Re-register handlers for loaded tasks
-        println!("Database not empty, re-registering handlers.");
-        for (id, name, task_type) in loaded_tasks {
-            if task_type == "native" {
-                match name.as_str() {
-                    "heartbeat" => {
-                        scheduler
-                            .register_handler(id, heartbeat_handler.clone())
-                            .await
-                            .unwrap();
-                    }
-                    "hourly-report" => {
-                        scheduler
-                            .register_handler(id, report_handler)
-                            .await
-                            .unwrap();
-                    }
-                    "cache-cleanup" => {
-                        scheduler
-                            .register_handler(id, cleanup_handler)
-                            .await
-                            .unwrap();
-                    }
-                    _ => {
-                        println!(
-                            "Warning: No handler defined for native task '{}'",
-                            name
-                        )
-                    }
-                }
-            }
-            // WASM handlers are automatically re-registered in scheduler.load_tasks()
-        }
+        println!("cron.toml not found, running with existing database tasks.");
     }
 
-    // Start the scheduler
+    // 4. Start the scheduler
     scheduler.start().await;
 }

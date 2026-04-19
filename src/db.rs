@@ -31,12 +31,6 @@ impl Db {
     async fn init(
         &self,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // Drop existing tables to recreate with new schema for WASM support
-        let _ = self.conn.execute("DROP TABLE IF EXISTS execution_logs", ()).await;
-        let _ = self.conn.execute("DROP TABLE IF EXISTS cron_logs", ()).await;
-        let _ = self.conn.execute("DROP TABLE IF EXISTS tasks", ()).await;
-        let _ = self.conn.execute("DROP TABLE IF EXISTS cron_tasks", ()).await;
-
         self.conn
             .execute(
                 "CREATE TABLE IF NOT EXISTS cron_tasks (
