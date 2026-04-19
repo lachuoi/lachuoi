@@ -19,7 +19,22 @@ payload = "hello.wasm"
 
 [[task]]
 name = "weather-station"
-cron = "*/2 * * * * *"
+cron = "*/30 * * * * *"
 timezone = "Asia/Seoul"
 type = "wasm"
 payload = "weather_station.wasm"
+
+[[task]]
+name = "ssh foo"
+cron = "* * * * * *"
+timezone = "Asia/Seoul"
+type = "wasm"
+payload = "ssh.wasm"
+args = [
+  "1.ctb.seungjin.net",
+  "432",
+  "seungjin",
+  "file:~/.ssh/id_ed25519",
+  "hostname",
+  "key",
+]

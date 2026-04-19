@@ -17,6 +17,7 @@ pub struct TaskConfig {
     #[serde(rename = "type")]
     pub task_type: String,
     pub payload: Option<String>,
+    pub args: Option<Vec<String>>,
 }
 
 fn default_timezone() -> String {

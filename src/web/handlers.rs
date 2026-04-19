@@ -1,75 +1,69 @@
-use axum::{routing::get, Json, Router, extract::State, response::Html, response::sse::{Event, Sse}};
+use axum::{Json, extract::State, response::Html, response::sse::{Event, Sse}};
 use std::sync::Arc;
-use std::net::SocketAddr;
 use crate::scheduler::Scheduler;
 use crate::task::TaskStatus;
 use tokio_stream::StreamExt;
-use futures_util::stream::Stream;
+use futures_util::Stream;
 use std::convert::Infallible;
 
-pub struct WebServer {
-    scheduler: Arc<Scheduler>,
-    addr: SocketAddr,
-}
-
-impl WebServer {
-    pub fn new(scheduler: Arc<Scheduler>, port: u16) -> Self {
-        let addr = SocketAddr::from(([0, 0, 0, 0], port));
-        Self { scheduler, addr }
-    }
-
-    pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let app = Router::new()
-            .route("/", get(login_page_handler))
-            .route("/task-status", get(status_page_handler))
-            .route("/tasks", get(get_tasks_handler))
-            .route("/events", get(events_handler))
-            .with_state(self.scheduler);
-
-        println!("Web server listening on http://{}", self.addr);
-        let listener = tokio::net::TcpListener::bind(self.addr).await?;
-        axum::serve(listener, app).await?;
-        Ok(())
-    }
-}
-
-async fn events_handler(
+pub async fn events_handler(
     State(scheduler): State<Arc<Scheduler>>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
-    let rx = scheduler.subscribe_logs();
+    let log_rx = scheduler.subscribe_logs();
+    let status_rx = scheduler.subscribe_status();
     
     let initial_msg = futures_util::stream::once(async {
         Ok(Event::default().data("Log stream connected"))
     });
 
-    let stream = tokio_stream::wrappers::BroadcastStream::new(rx)
+    let log_stream = tokio_stream::wrappers::BroadcastStream::new(log_rx)
         .map(|msg| {
             match msg {
-                Ok(text) => Ok(Event::default().data(text)),
-                Err(_) => Ok(Event::default().data("... (log buffer overflowed)")),
+                Ok(text) => Ok(Event::default().event("log").data(text)),
+                Err(_) => Ok(Event::default().event("log").data("... (log buffer overflowed)")),
             }
         });
 
-    Sse::new(initial_msg.chain(stream)).keep_alive(axum::response::sse::KeepAlive::default())
+    let status_stream = tokio_stream::wrappers::BroadcastStream::new(status_rx)
+        .map(|msg| {
+            match msg {
+                Ok(status) => {
+                    let json = serde_json::to_string(&status).unwrap_or_default();
+                    Ok(Event::default().event("status").data(json))
+                },
+                Err(_) => Ok(Event::default().event("log").data("... (status buffer overflowed)")),
+            }
+        });
+
+    let combined = StreamExt::merge(initial_msg.chain(log_stream), status_stream);
+
+    Sse::new(combined).keep_alive(axum::response::sse::KeepAlive::default())
 }
 
-async fn get_tasks_handler(State(scheduler): State<Arc<Scheduler>>) -> Json<Vec<TaskStatus>> {
+pub async fn get_tasks_handler(State(scheduler): State<Arc<Scheduler>>) -> Json<Vec<TaskStatus>> {
     Json(scheduler.get_tasks_status().await)
 }
 
-async fn login_page_handler() -> Html<String> {
+pub async fn login_page_handler() -> Html<String> {
     match std::fs::read_to_string("web/templates/login.html") {
         Ok(t) => Html(t),
         Err(e) => Html(format!("Error loading login template: {}", e)),
     }
 }
 
-async fn status_page_handler(State(scheduler): State<Arc<Scheduler>>) -> Html<String> {
+pub async fn status_page_handler(State(scheduler): State<Arc<Scheduler>>) -> Html<String> {
     let tasks = scheduler.get_tasks_status().await;
     
     let mut rows = String::new();
     for task in tasks {
-        let status_class = if task.enabled { "status-enabled" } else { "status-disabled" };
+        let mut status_class = if task.enabled { "status-enabled" } else { "status-disabled" };
+        let mut status_text = if task.enabled { "Active" } else { "Paused" };
+
+        if task.enabled && task.last_failed {
+            status_class = "status-disabled";
+            status_text = "Failed";
+        }
+
         let last_run = format_relative_time(&task.last_run);
         let duration = task.last_duration_ms.map(|ms| format!("<span class='duration'>({}ms)</span>", ms)).unwrap_or_default();
         
@@ -80,7 +74,7 @@ async fn status_page_handler(State(scheduler): State<Arc<Scheduler>>) -> Html<St
                 <td><code>{cron}</code></td>
                 <td>{tz}</td>
                 <td class='time-cell'>{last} {dur}</td>
-                <td><span class='status-pill {s_class}'>{enabled}</span></td>
+                <td><span class='status-pill {s_class}'>{s_text}</span></td>
             </tr>",
             name = task.name,
             t_type = task.task_type,
@@ -89,7 +83,7 @@ async fn status_page_handler(State(scheduler): State<Arc<Scheduler>>) -> Html<St
             last = last_run,
             dur = duration,
             s_class = status_class,
-            enabled = if task.enabled { "Active" } else { "Paused" }
+            s_text = status_text
         ));
     }
 

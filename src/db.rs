@@ -25,6 +25,9 @@ impl Db {
         let db_wrapper = Self { conn };
         db_wrapper.init().await?;
 
+        // Migration: add args column if not exists
+        let _ = db_wrapper.conn.execute("ALTER TABLE cron_tasks ADD COLUMN args TEXT", ()).await;
+
         Ok(db_wrapper)
     }
 
@@ -40,6 +43,7 @@ impl Db {
                 timezone TEXT NOT NULL,
                 task_type TEXT NOT NULL DEFAULT 'native',
                 payload TEXT,
+                args TEXT,
                 enabled BOOLEAN NOT NULL DEFAULT 1,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )",
@@ -75,10 +79,13 @@ impl Db {
         timezone: &str,
         task_type: &str,
         payload: Option<&str>,
+        args: Option<Vec<String>>,
         enabled: bool,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let args_json = args.map(|a| serde_json::to_string(&a).unwrap());
+
         self.conn.execute(
-            "INSERT OR REPLACE INTO cron_tasks (id, name, cron_expr, timezone, task_type, payload, enabled) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO cron_tasks (id, name, cron_expr, timezone, task_type, payload, args, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             libsql::params![
                 id.to_string(),
                 name.to_string(),
@@ -86,6 +93,7 @@ impl Db {
                 timezone.to_string(),
                 task_type.to_string(),
                 payload.map(|s| s.to_string()),
+                args_json,
                 if enabled { 1 } else { 0 }
             ]
         )
@@ -97,12 +105,12 @@ impl Db {
     pub async fn get_tasks(
         &self,
     ) -> Result<
-        Vec<(Uuid, String, String, String, String, Option<String>, bool)>,
+        Vec<(Uuid, String, String, String, String, Option<String>, Option<Vec<String>>, bool)>,
         Box<dyn std::error::Error + Send + Sync>,
     > {
         let mut rows = self
             .conn
-            .query("SELECT id, name, cron_expr, timezone, task_type, payload, enabled FROM cron_tasks", ())
+            .query("SELECT id, name, cron_expr, timezone, task_type, payload, args, enabled FROM cron_tasks", ())
             .await?;
 
         let mut tasks = Vec::new();
@@ -113,10 +121,13 @@ impl Db {
             let timezone: String = row.get(3)?;
             let task_type: String = row.get(4)?;
             let payload: Option<String> = row.get(5)?;
-            let enabled_int: i64 = row.get(6)?;
+            let args_json: Option<String> = row.get(6)?;
+            let enabled_int: i64 = row.get(7)?;
+
+            let args = args_json.and_then(|j| serde_json::from_str(&j).ok());
 
             if let Ok(id) = Uuid::parse_str(&id_str) {
-                tasks.push((id, name, cron_expr, timezone, task_type, payload, enabled_int != 0));
+                tasks.push((id, name, cron_expr, timezone, task_type, payload, args, enabled_int != 0));
             }
         }
 

@@ -3,9 +3,8 @@ use chrono_tz::Tz;
 use cron::Schedule;
 use std::str::FromStr;
 use uuid::Uuid;
-use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct TaskStatus {
     pub id: Uuid,
     pub name: String,
@@ -14,6 +13,7 @@ pub struct TaskStatus {
     pub task_type: String,
     pub last_run: Option<String>,
     pub last_duration_ms: Option<u128>,
+    pub last_failed: bool,
     pub enabled: bool,
 }
 
@@ -25,9 +25,11 @@ pub struct ScheduledTask {
     pub timezone: Tz,
     pub task_type: String,
     pub payload: Option<String>,
+    pub args: Option<Vec<String>>,
     pub schedule: Schedule,
     pub last_run: Option<DateTime<Tz>>,
     pub last_duration: Option<u128>,
+    pub last_failed: bool,
     pub enabled: bool,
 }
 
@@ -51,9 +53,11 @@ impl ScheduledTask {
             timezone,
             task_type: "native".to_string(),
             payload: None,
+            args: None,
             schedule,
             last_run: None,
             last_duration: None,
+            last_failed: false,
             enabled: true,
         })
     }
@@ -64,10 +68,12 @@ impl ScheduledTask {
         cron_expr: &str,
         timezone_str: &str,
         wasm_path: &str,
+        args: Option<Vec<String>>,
     ) -> Result<Self, String> {
         let mut task = Self::new(name, cron_expr, timezone_str)?;
         task.task_type = "wasm".to_string();
         task.payload = Some(wasm_path.to_string());
+        task.args = args;
         Ok(task)
     }
 
@@ -79,6 +85,7 @@ impl ScheduledTask {
         timezone: Tz,
         task_type: String,
         payload: Option<String>,
+        args: Option<Vec<String>>,
         enabled: bool,
     ) -> Result<Self, String> {
         let schedule = Schedule::from_str(&cron_expr)
@@ -91,9 +98,11 @@ impl ScheduledTask {
             timezone,
             task_type,
             payload,
+            args,
             schedule,
             last_run: None,
             last_duration: None,
+            last_failed: false,
             enabled,
         })
     }
