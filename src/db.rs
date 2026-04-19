@@ -47,13 +47,17 @@ impl Db {
             )
             .await?;
 
+        // Recreate cron_logs with duration instead of status
+        // We use duration_ms (NULL = not finished/crashed)
+        let _ = self.conn.execute("DROP TABLE IF EXISTS cron_logs", ()).await;
+        
         self.conn
             .execute(
                 "CREATE TABLE IF NOT EXISTS cron_logs (
                 id TEXT PRIMARY KEY NOT NULL,
                 task_id TEXT NOT NULL,
                 run_at DATETIME NOT NULL,
-                status TEXT NOT NULL,
+                duration_ms INTEGER,
                 FOREIGN KEY(task_id) REFERENCES cron_tasks(id)
             )",
                 (),
@@ -161,18 +165,34 @@ impl Db {
         Ok(())
     }
 
-    pub async fn log_execution(
+    pub async fn log_execution_start(
         &self,
         task_id: Uuid,
-        status: &str,
+    ) -> Result<Uuid, Box<dyn std::error::Error + Send + Sync>> {
+        let log_id = Uuid::new_v4();
+        self.conn.execute(
+            "INSERT INTO cron_logs (id, task_id, run_at, duration_ms) VALUES (?, ?, ?, NULL)",
+            libsql::params![
+                log_id.to_string(),
+                task_id.to_string(),
+                Utc::now().to_rfc3339()
+            ]
+        )
+        .await?;
+
+        Ok(log_id)
+    }
+
+    pub async fn log_execution_finish(
+        &self,
+        log_id: Uuid,
+        duration_ms: u128,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "INSERT INTO cron_logs (id, task_id, run_at, status) VALUES (?, ?, ?, ?)",
+            "UPDATE cron_logs SET duration_ms = ? WHERE id = ?",
             libsql::params![
-                Uuid::new_v4().to_string(),
-                task_id.to_string(),
-                Utc::now().to_rfc3339(),
-                status.to_string()
+                duration_ms as i64,
+                log_id.to_string()
             ]
         )
         .await?;

@@ -328,9 +328,12 @@ impl Scheduler {
                 let db = self.db.clone();
 
                 tokio::spawn(async move {
-                    let _ = db.log_execution(task_id, "started").await;
-                    handler();
-                    let _ = db.log_execution(task_id, "completed").await;
+                    if let Ok(log_id) = db.log_execution_start(task_id).await {
+                        let start = std::time::Instant::now();
+                        handler();
+                        let duration = start.elapsed().as_millis();
+                        let _ = db.log_execution_finish(log_id, duration).await;
+                    }
                 });
             }
         }
