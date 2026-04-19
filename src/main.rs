@@ -7,6 +7,7 @@ use task_scheduler::config::AppConfig;
 use task_scheduler::db::Db;
 use task_scheduler::scheduler::Scheduler;
 use task_scheduler::web::WebServer;
+use uuid::Uuid;
 
 #[tokio::main]
 async fn main() {
@@ -32,20 +33,23 @@ async fn main() {
     // 3. Define and register native handlers
     let counter = Arc::new(AtomicU32::new(0));
     let counter_clone = Arc::clone(&counter);
-    let mut native_handlers: HashMap<String, Arc<dyn Fn() -> Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send>> + Send + Sync>> =
+    let mut native_handlers: HashMap<String, Arc<dyn Fn(Uuid, Db, tokio::sync::broadcast::Sender<String>) -> Pin<Box<dyn std::future::Future<Output = Result<(), String>> + Send>> + Send + Sync>> =
         HashMap::new();
 
     native_handlers.insert(
         "heartbeat".to_string(),
-        Arc::new(move || {
+        Arc::new(move |log_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<String>| {
             let counter_clone = Arc::clone(&counter_clone);
             Box::pin(async move {
                 let count = counter_clone.fetch_add(1, Ordering::SeqCst);
-                println!(
+                let msg = format!(
                     "[{}] Heartbeat #{}",
                     Utc::now().format("%H:%M:%S"),
                     count + 1
                 );
+                println!("{}", msg);
+                let _ = db.save_log_line(log_id, &msg).await;
+                let _ = log_sender.send(msg);
                 Ok(())
             })
         }),
@@ -53,12 +57,15 @@ async fn main() {
 
     native_handlers.insert(
         "hourly-report".to_string(),
-        Arc::new(|| {
+        Arc::new(|log_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<String>| {
             Box::pin(async move {
-                println!(
+                let msg = format!(
                     "[{}] Generating hourly report...",
                     Utc::now().format("%H:%M:%S")
                 );
+                println!("{}", msg);
+                let _ = db.save_log_line(log_id, &msg).await;
+                let _ = log_sender.send(msg);
                 Ok(())
             })
         }),
@@ -66,12 +73,15 @@ async fn main() {
 
     native_handlers.insert(
         "cache-cleanup".to_string(),
-        Arc::new(|| {
+        Arc::new(|log_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<String>| {
             Box::pin(async move {
-                println!(
+                let msg = format!(
                     "[{}] Cleaning up cache...",
                     Utc::now().format("%H:%M:%S")
                 );
+                println!("{}", msg);
+                let _ = db.save_log_line(log_id, &msg).await;
+                let _ = log_sender.send(msg);
                 Ok(())
             })
         }),

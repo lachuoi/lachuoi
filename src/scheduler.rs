@@ -35,13 +35,15 @@ use std::pin::Pin;
 use std::future::Future;
 
 // Type alias for task handlers - functions that execute when a task runs
-type TaskHandler = Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync>;
+type TaskHandler = Arc<dyn Fn(Uuid, Db, tokio::sync::broadcast::Sender<String>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync>;
 
 use std::io::{Read, Write};
 
 struct PrefixPipe {
     prefix: String,
+    log_id: Uuid,
     sender: tokio::sync::broadcast::Sender<String>,
+    db: Db,
 }
 
 #[async_trait::async_trait]
@@ -55,7 +57,14 @@ impl wasmtime_wasi::HostOutputStream for PrefixPipe {
         for line in text.lines() {
             let msg = format!("[{}] {}", self.prefix, line);
             println!("{}", msg);
-            let _ = self.sender.send(msg);
+            let _ = self.sender.send(msg.clone());
+            
+            // Save to database (fire and forget for now, or use a runtime)
+            let db = self.db.clone();
+            let log_id = self.log_id;
+            tokio::spawn(async move {
+                let _ = db.save_log_line(log_id, &msg).await;
+            });
         }
         Ok(())
     }
@@ -73,7 +82,9 @@ impl wasmtime_wasi::StdoutStream for PrefixPipe {
     fn stream(&self) -> Box<dyn wasmtime_wasi::HostOutputStream> {
         Box::new(PrefixPipe {
             prefix: self.prefix.clone(),
+            log_id: self.log_id,
             sender: self.sender.clone(),
+            db: self.db.clone(),
         })
     }
 
@@ -148,7 +159,7 @@ impl Scheduler {
     pub async fn sync_with_config(
         &self,
         config: &crate::config::AppConfig,
-        native_handlers: &HashMap<String, Arc<dyn Fn() -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync>>,
+        native_handlers: &HashMap<String, Arc<dyn Fn(Uuid, Db, tokio::sync::broadcast::Sender<String>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync>>,
     ) -> Result<(), String> {
         // 1. Map existing tasks by name
         let existing_by_name = {
@@ -181,7 +192,7 @@ impl Scheduler {
                             .map_err(|e| format!("Failed to save task: {}", e))?;
 
                         self.tasks.write().await.insert(task_id, task);
-                        self.register_handler(task_id, move || handler()).await?;
+                        self.register_handler(task_id, move |log_id, db, log_sender| handler(log_id, db, log_sender)).await?;
                     } else {
                         println!("Warning: No native handler found for task '{}'", task_cfg.name);
                     }
@@ -298,18 +309,16 @@ impl Scheduler {
 
         let path_for_error = wasm_path.clone();
 
-        let log_sender = self.log_sender.clone();
-        let handler = move || {
+        let handler = move |log_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<String>| {
             let engine = engine.clone();
             let path = full_path.clone();
             let err_path = path_for_error.clone();
             let name = task_name.clone();
-            let log_sender = log_sender.clone();
             let args = args.clone();
 
             Box::pin(async move {
                 let resolved_args = Self::resolve_args(args).await;
-                if let Err(e) = Self::run_wasm_file(&engine, path.to_str().unwrap_or(&err_path), &name, log_sender, resolved_args).await {
+                if let Err(e) = Self::run_wasm_file(&engine, path.to_str().unwrap_or(&err_path), &name, log_sender, resolved_args, log_id, db).await {
                     let err_msg = format!("Error executing WASM task: {}", e);
                     eprintln!("{}", err_msg);
                     Err(err_msg)
@@ -322,18 +331,19 @@ impl Scheduler {
         self.handlers.write().await.insert(task_id, Arc::new(handler));
         Ok(())
     }
-    async fn run_wasm_file(engine: &Engine, path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+
+    async fn run_wasm_file(engine: &Engine, path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let binary = std::fs::read(path)?;
 
         // Check if it's a WASM component (starts with \0asm and version 0x0d)
         if binary.starts_with(&[0, 0x61, 0x73, 0x6d, 0x0d, 0, 1, 0]) {
-            Self::run_wasm_component(engine, &binary, path, task_name, log_sender, args).await
+            Self::run_wasm_component(engine, &binary, path, task_name, log_sender, args, log_id, db).await
         } else {
-            Self::run_wasm_module(engine, &binary, path, task_name, log_sender, args).await
+            Self::run_wasm_module(engine, &binary, path, task_name, log_sender, args, log_id, db).await
         }
     }
 
-    async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let module = Module::from_binary(engine, binary)?;
 
         struct MyState {
@@ -346,7 +356,9 @@ impl Scheduler {
         let mut builder = WasiCtxBuilder::new();
         builder.stdout(PrefixPipe { 
                 prefix: task_name.to_string(),
+                log_id,
                 sender: log_sender,
+                db,
             })
             .inherit_stderr();
 
@@ -368,7 +380,7 @@ impl Scheduler {
         Ok(())
     }
 
-    async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let component = Component::from_binary(engine, binary)?;
 
         let mut linker = ComponentLinker::new(engine);
@@ -378,7 +390,9 @@ impl Scheduler {
         let mut builder = WasiCtxBuilder::new();
         builder.stdout(PrefixPipe { 
                 prefix: task_name.to_string(),
+                log_id,
                 sender: log_sender,
+                db,
             })
             .inherit_stderr()
             .inherit_network()
@@ -408,16 +422,17 @@ impl Scheduler {
 
 
 
+
     // Register a handler for a specific task ID
     pub async fn register_handler<F, Fut>(&self, task_id: Uuid, handler: F) -> Result<(), String>
     where
-        F: Fn() -> Fut + Send + Sync + 'static,
+        F: Fn(Uuid, Db, tokio::sync::broadcast::Sender<String>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<(), String>> + Send + 'static,
     {
         let handler = Arc::new(handler);
-        let wrapped_handler = move || {
+        let wrapped_handler = move |log_id, db, log_sender| {
             let h = Arc::clone(&handler);
-            Box::pin(async move { h().await }) as Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
+            Box::pin(async move { h(log_id, db, log_sender).await }) as Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
         };
 
         self.handlers
@@ -436,7 +451,7 @@ impl Scheduler {
         handler: F,
     ) -> Result<Uuid, String>
     where
-        F: Fn() -> Fut + Send + Sync + 'static,
+        F: Fn(Uuid, Db, tokio::sync::broadcast::Sender<String>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<(), String>> + Send + 'static,
     {
         let task = ScheduledTask::new(name, cron_expr, timezone)?;
@@ -567,20 +582,23 @@ impl Scheduler {
                         let start = std::time::Instant::now();
                         let start_msg = format!("[{}] Starting task...", name);
                         println!("{}", start_msg);
+                        let _ = db.save_log_line(log_id, &start_msg).await;
                         let _ = log_sender.send(start_msg);
                         
-                        let result = handler().await;
+                        let result = handler(log_id, db.clone(), log_sender.clone()).await;
                         let is_failed = result.is_err();
                         
                         if let Err(e) = &result {
                             let err_msg = format!("[{}] Task failed: {}", name, e);
                             println!("{}", err_msg);
+                            let _ = db.save_log_line(log_id, &err_msg).await;
                             let _ = log_sender.send(err_msg);
                         }
                         
                         let duration = start.elapsed().as_millis();
                         let finish_msg = format!("[{}] Task finished in {}ms", name, duration);
                         println!("{}", finish_msg);
+                        let _ = db.save_log_line(log_id, &finish_msg).await;
                         let _ = log_sender.send(finish_msg);
                         
                         let _ = db.log_execution_finish(log_id, duration).await;

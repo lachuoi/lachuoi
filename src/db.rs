@@ -51,8 +51,9 @@ impl Db {
             )
             .await?;
 
-        // Recreate cron_logs with duration instead of status
+        // Recreate logs with duration instead of status
         // We use duration_ms (NULL = not finished/crashed)
+        let _ = self.conn.execute("DROP TABLE IF EXISTS cron_outputs", ()).await;
         let _ = self.conn.execute("DROP TABLE IF EXISTS cron_logs", ()).await;
         
         self.conn
@@ -67,6 +68,36 @@ impl Db {
                 (),
             )
             .await?;
+
+        self.conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS cron_outputs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                log_id TEXT NOT NULL,
+                output TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY(log_id) REFERENCES cron_logs(id)
+            )",
+                (),
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn save_log_line(
+        &self,
+        log_id: Uuid,
+        output: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.conn.execute(
+            "INSERT INTO cron_outputs (log_id, output) VALUES (?, ?)",
+            libsql::params![
+                log_id.to_string(),
+                output.to_string()
+            ]
+        )
+        .await?;
 
         Ok(())
     }
