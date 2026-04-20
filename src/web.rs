@@ -33,6 +33,7 @@ impl WebServer {
             .route("/auth/github/callback", get(handlers::github_callback))
             .route("/logout", get(handlers::logout))
             .route("/task-status", get(handlers::status_page_handler))
+            .route("/admin/reload", get(handlers::reload_config_handler))
             .route("/tasks", get(handlers::get_tasks_handler))
             .route("/events", get(handlers::events_handler))
             .nest_service("/static", ServeDir::new("web"))

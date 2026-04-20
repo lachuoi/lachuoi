@@ -137,4 +137,13 @@ impl ScheduledTask {
 
         false
     }
+
+    pub fn config_equals(&self, cron: &str, timezone: &str, task_type: &str, payload: Option<&str>, args: Option<&[String]>, sha256: Option<&str>) -> bool {
+        self.cron_expr == cron &&
+        self.timezone.to_string() == timezone &&
+        self.task_type == task_type &&
+        self.payload.as_deref() == payload &&
+        self.args.as_deref() == args &&
+        self.sha256.as_deref() == sha256
+    }
 }

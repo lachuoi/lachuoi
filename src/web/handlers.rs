@@ -168,6 +168,20 @@ pub async fn login_page_handler(session: Session) -> impl IntoResponse {
     }
 }
 
+pub async fn reload_config_handler(
+    State(scheduler): State<Arc<Scheduler>>,
+    session: Session,
+) -> impl IntoResponse {
+    if session.get::<i64>(USER_SESSION_KEY).await.unwrap().is_none() {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+    }
+
+    match scheduler.reload_from_file("cron.toml").await {
+        Ok(_) => (StatusCode::OK, "Configuration reloaded successfully").into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to reload configuration: {}", e)).into_response(),
+    }
+}
+
 pub async fn status_page_handler(
     State(scheduler): State<Arc<Scheduler>>,
     session: Session,
