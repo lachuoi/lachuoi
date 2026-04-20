@@ -27,8 +27,7 @@ fn heartbeat_handler(counter: Arc<AtomicU32>) -> Arc<dyn Fn(Uuid, Db, tokio::syn
         Box::pin(async move {
             let count = counter.fetch_add(1, Ordering::SeqCst);
             let msg = format!(
-                "[{}] Heartbeat #{}",
-                Utc::now().format("%H:%M:%S"),
+                "[heartbeat] Heartbeat #{}",
                 count + 1
             );
             println!("{}", msg);
@@ -42,10 +41,7 @@ fn heartbeat_handler(counter: Arc<AtomicU32>) -> Arc<dyn Fn(Uuid, Db, tokio::syn
 /// Hourly report placeholder
 fn hourly_report_handler(log_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<String>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> {
     Box::pin(async move {
-        let msg = format!(
-            "[{}] Generating hourly report...",
-            Utc::now().format("%H:%M:%S")
-        );
+        let msg = "[hourly-report] Generating hourly report...".to_string();
         println!("{}", msg);
         let _ = db.save_log_line(log_id, &msg).await;
         let _ = log_sender.send(msg);
@@ -56,10 +52,7 @@ fn hourly_report_handler(log_id: Uuid, db: Db, log_sender: tokio::sync::broadcas
 /// Cache cleanup placeholder
 fn cache_cleanup_handler(log_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<String>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> {
     Box::pin(async move {
-        let msg = format!(
-            "[{}] Cleaning up cache...",
-            Utc::now().format("%H:%M:%S")
-        );
+        let msg = "[cache-cleanup] Cleaning up cache...".to_string();
         println!("{}", msg);
         let _ = db.save_log_line(log_id, &msg).await;
         let _ = log_sender.send(msg);

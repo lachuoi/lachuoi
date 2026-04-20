@@ -37,12 +37,36 @@
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 border-b border-slate-200">
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Name</th>
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Schedule</th>
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Timezone</th>
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Last Run</th>
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group" onclick="setSort('name')">
+                                    <div class="flex items-center gap-1">
+                                        Name <span id="sort-name" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group" onclick="setSort('task_type')">
+                                    <div class="flex items-center gap-1">
+                                        Type <span id="sort-task_type" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group" onclick="setSort('cron')">
+                                    <div class="flex items-center gap-1">
+                                        Schedule <span id="sort-cron" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group" onclick="setSort('timezone')">
+                                    <div class="flex items-center gap-1">
+                                        Timezone <span id="sort-timezone" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group" onclick="setSort('last_run')">
+                                    <div class="flex items-center gap-1">
+                                        Last Run <span id="sort-last_run" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group" onclick="setSort('enabled')">
+                                    <div class="flex items-center gap-1">
+                                        Status <span id="sort-enabled" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
                                 <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>

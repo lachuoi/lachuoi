@@ -41,11 +41,14 @@ type TaskHandler = Arc<dyn Fn(Uuid, Db, tokio::sync::broadcast::Sender<String>) 
 
 use std::io::{Read, Write};
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 struct PrefixPipe {
     prefix: String,
     log_id: Uuid,
     sender: tokio::sync::broadcast::Sender<String>,
     db: Db,
+    error_detected: Option<Arc<AtomicBool>>,
 }
 
 #[async_trait::async_trait]
@@ -61,7 +64,15 @@ impl wasmtime_wasi::HostOutputStream for PrefixPipe {
             println!("{}", msg);
             let _ = self.sender.send(msg.clone());
             
-            // Save to database (fire and forget for now, or use a runtime)
+            // Error detection
+            let line_lower = line.to_lowercase();
+            if line_lower.contains("error:") || line_lower.contains("failed") {
+                if let Some(flag) = &self.error_detected {
+                    flag.store(true, Ordering::SeqCst);
+                }
+            }
+
+            // Save to database
             let db = self.db.clone();
             let log_id = self.log_id;
             tokio::spawn(async move {
@@ -87,6 +98,7 @@ impl wasmtime_wasi::StdoutStream for PrefixPipe {
             log_id: self.log_id,
             sender: self.sender.clone(),
             db: self.db.clone(),
+            error_detected: self.error_detected.clone(),
         })
     }
 
@@ -472,14 +484,23 @@ impl Scheduler {
         let mut linker = Linker::new(engine);
         preview1::add_to_linker_async(&mut linker, |state: &mut MyState| &mut state.wasi)?;
 
+        let error_detected = Arc::new(AtomicBool::new(false));
+
         let mut builder = WasiCtxBuilder::new();
-        builder.stdout(PrefixPipe { 
+        builder.stdout(PrefixPipe {
+                prefix: task_name.to_string(),
+                log_id,
+                sender: log_sender.clone(),
+                db: db.clone(),
+                error_detected: Some(Arc::clone(&error_detected)),
+            })
+            .stderr(PrefixPipe {
                 prefix: task_name.to_string(),
                 log_id,
                 sender: log_sender,
                 db,
-            })
-            .inherit_stderr();
+                error_detected: Some(Arc::clone(&error_detected)),
+            });
 
         // Standard behavior: argv[0] is the program name
         let mut full_args = vec![wasm_path.to_string()];
@@ -496,8 +517,12 @@ impl Scheduler {
         let func = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
 
         func.call_async(&mut store, ()).await?;
-        Ok(())
-    }
+
+        if error_detected.load(Ordering::SeqCst) {
+            return Err(Box::<dyn std::error::Error + Send + Sync>::from("Error detected in task output"));
+        }
+
+        Ok(())    }
 
     async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let component = Component::from_binary(engine, binary)?;
@@ -506,14 +531,23 @@ impl Scheduler {
         wasmtime_wasi::add_to_linker_async(&mut linker)?;
         add_http_to_linker(&mut linker)?;
 
+        let error_detected = Arc::new(AtomicBool::new(false));
+
         let mut builder = WasiCtxBuilder::new();
-        builder.stdout(PrefixPipe { 
+        builder.stdout(PrefixPipe {
+                prefix: task_name.to_string(),
+                log_id,
+                sender: log_sender.clone(),
+                db: db.clone(),
+                error_detected: Some(Arc::clone(&error_detected)),
+            })
+            .stderr(PrefixPipe {
                 prefix: task_name.to_string(),
                 log_id,
                 sender: log_sender,
                 db,
+                error_detected: Some(Arc::clone(&error_detected)),
             })
-            .inherit_stderr()
             .inherit_network()
             .allow_ip_name_lookup(true);
 
@@ -536,8 +570,11 @@ impl Scheduler {
 
         result?.map_err(|()| Box::<dyn std::error::Error + Send + Sync>::from("WASI run failed"))?;
 
-        Ok(())
-    }
+        if error_detected.load(Ordering::SeqCst) {
+            return Err(Box::<dyn std::error::Error + Send + Sync>::from("Error detected in task output"));
+        }
+
+        Ok(())    }
 
 
 

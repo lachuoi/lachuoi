@@ -1,6 +1,6 @@
 [[task]]
 name = "heartbeat"
-cron = "0 * * * * *"
+cron = "40 * * * * *"
 timezone = "UTC"
 type = "native"
 
@@ -27,7 +27,7 @@ payload = "weather_station.wasm"
 
 [[task]]
 name = "ssh foo"
-cron = "0 * * * * *"
+cron = "0 0 * * * *"
 timezone = "Asia/Seoul"
 type = "wasm"
 payload = "ssh.wasm"
@@ -43,7 +43,7 @@ args = [
 
 [[task]]
 name = "ssh bar"
-cron = "0 * * * * *"
+cron = "0 0 * * * *"
 timezone = "Asia/Seoul"
 type = "wasm"
 payload = "ssh.wasm"
@@ -60,6 +60,22 @@ args = [
 [[task]]
 name = "LeLoi base image build"
 cron = "0 0 4 * * *"
+timezone = "Asia/Seoul"
+type = "wasm"
+payload = "ssh.wasm"
+sha256 = "ad677d5c7c136f862aed95f61879d0b0bb80cfb6f99212b7a7aada581b50f70c"
+args = [
+  "0.zap.seungjin.net",
+  "432",
+  "seungjin",
+  "file:~/.ssh/id_ed25519",
+  "podman --version",
+  "key",
+]
+
+[[task]]
+name = "LeLoi image build"
+cron = "0 0 5 * * *"
 timezone = "Asia/Seoul"
 type = "wasm"
 payload = "ssh.wasm"

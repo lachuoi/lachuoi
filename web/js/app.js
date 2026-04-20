@@ -3,47 +3,62 @@ const statusIndicator = document.getElementById('status-indicator');
 const tableBody = document.getElementById('task-table-body');
 const eventSource = new EventSource('/events');
 
-function formatRelativeTime(lastRunRfc3339) {
-    if (!lastRunRfc3339) return 'Never';
-    const lastRun = new Date(lastRunRfc3339);
-    const now = new Date();
-    const diffSeconds = Math.floor((now - lastRun) / 1000);
+let latestTasks = [];
+let currentSortColumn = 'name';
+let currentSortDirection = 'asc';
 
-    if (isNaN(lastRun.getTime())) return 'Invalid Date';
-    if (diffSeconds < 0) return 'Just now';
-    if (diffSeconds < 60) return `${diffSeconds}s ago`;
-    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
-    if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
-    return lastRun.toLocaleTimeString();
+function setSort(column) {
+    if (currentSortColumn === column) {
+        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortColumn = column;
+        currentSortDirection = 'asc';
+    }
+    renderTable();
 }
 
-eventSource.addEventListener('log', (event) => {
-    const entry = document.createElement('div');
-    entry.className = 'mb-1 flex gap-3 text-xs md:text-sm';
-    
-    // Check if it's an error message
-    const isError = event.data.toLowerCase().includes('failed') || event.data.toLowerCase().includes('error');
-    const textColor = isError ? 'text-red-400 font-medium' : 'text-slate-300';
-    
-    const time = new Date().toLocaleTimeString();
-    entry.innerHTML = `
-        <span class="text-slate-500 shrink-0 font-medium select-none">[${time}]</span> 
-        <span class="${textColor}">${event.data}</span>
-    `;
-    
-    logsDiv.appendChild(entry);
-    logsDiv.scrollTop = logsDiv.scrollHeight;
+function updateSortIndicators() {
+    const columns = ['name', 'task_type', 'cron', 'timezone', 'last_run', 'enabled'];
+    columns.forEach(col => {
+        const indicator = document.getElementById(`sort-${col}`);
+        if (!indicator) return;
+        
+        if (currentSortColumn === col) {
+            indicator.innerText = currentSortDirection === 'asc' ? '↑' : '↓';
+            indicator.className = 'text-blue-500 font-bold opacity-100';
+        } else {
+            indicator.innerText = '↕';
+            indicator.className = 'opacity-0 group-hover:opacity-100 transition-opacity';
+        }
+    });
+}
 
-    while (logsDiv.childNodes.length > 1000) {
-        logsDiv.removeChild(logsDiv.firstChild);
-    }
-});
+function renderTable() {
+    if (!latestTasks || latestTasks.length === 0) return;
 
-eventSource.addEventListener('status', (event) => {
-    const tasks = JSON.parse(event.data);
+    // 1. Sort the data
+    const sortedTasks = [...latestTasks].sort((a, b) => {
+        let valA = a[currentSortColumn];
+        let valB = b[currentSortColumn];
+
+        // Special handling for dates
+        if (currentSortColumn === 'last_run') {
+            valA = valA ? new Date(valA).getTime() : 0;
+            valB = valB ? new Date(valB).getTime() : 0;
+        } else {
+            // Handle nulls for strings/booleans
+            if (valA === null || valA === undefined) valA = '';
+            if (valB === null || valB === undefined) valB = '';
+        }
+
+        if (valA < valB) return currentSortDirection === 'asc' ? -1 : 1;
+        if (valA > valB) return currentSortDirection === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    // 2. Generate HTML
     let rows = '';
-    
-    tasks.forEach(task => {
+    sortedTasks.forEach(task => {
         let statusClass = task.enabled ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200';
         let statusText = task.enabled ? 'Active' : 'Paused';
         
@@ -77,6 +92,52 @@ eventSource.addEventListener('status', (event) => {
     if (tableBody) {
         tableBody.innerHTML = rows;
     }
+    
+    updateSortIndicators();
+}
+
+function formatRelativeTime(lastRunRfc3339) {
+    if (!lastRunRfc3339) return 'Never';
+    const lastRun = new Date(lastRunRfc3339);
+    const now = new Date();
+    const diffSeconds = Math.floor((now - lastRun) / 1000);
+
+    if (isNaN(lastRun.getTime())) return 'Invalid Date';
+    if (diffSeconds < 0) return 'Just now';
+    if (diffSeconds < 60) return `${diffSeconds}s ago`;
+    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
+    if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
+    return lastRun.toLocaleTimeString();
+}
+
+function pruneLogs() {
+    while (logsDiv.childNodes.length > 1000) {
+        logsDiv.removeChild(logsDiv.firstChild);
+    }
+}
+
+eventSource.addEventListener('log', (event) => {
+    const entry = document.createElement('div');
+    entry.className = 'mb-1 flex gap-3 text-xs md:text-sm';
+    
+    // Check if it's an error message
+    const isError = event.data.toLowerCase().includes('failed') || event.data.toLowerCase().includes('error');
+    const textColor = isError ? 'text-red-400 font-medium' : 'text-slate-300';
+    
+    const time = new Date().toLocaleTimeString();
+    entry.innerHTML = `
+        <span class="text-slate-500 shrink-0 font-medium select-none">[${time}]</span> 
+        <span class="${textColor}">${event.data}</span>
+    `;
+    
+    logsDiv.appendChild(entry);
+    logsDiv.scrollTop = logsDiv.scrollHeight;
+    pruneLogs();
+});
+
+eventSource.addEventListener('status', (event) => {
+    latestTasks = JSON.parse(event.data);
+    renderTable();
 });
 
 async function toggleTask(taskId, enabled) {
@@ -110,6 +171,7 @@ eventSource.onmessage = (event) => {
         `;
         logsDiv.appendChild(entry);
         logsDiv.scrollTop = logsDiv.scrollHeight;
+        pruneLogs();
     }
 };
 
