@@ -26,3 +26,9 @@ gag = "1.0"
 async-trait = "0.1"
 bytes = "1.0"
 sha2 = "0.11.0"
+oauth2 = "5.0.0"
+tower-sessions = { version = "0.12", features = ["default", "memory-store"] }
+reqwest = { version = "0.13.2", features = ["form", "json", "multipart", "rustls"] }
+anyhow = "1.0.102"
+rand = "0.10.1"
+urlencoding = "2.1.3"

@@ -246,4 +246,8 @@ impl Db {
 
         Ok(())
     }
+
+    pub fn get_conn(&self) -> Connection {
+        self.conn.clone()
+    }
 }

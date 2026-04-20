@@ -139,6 +139,10 @@ impl Scheduler {
         self.plugins_dir = std::path::PathBuf::from(path);
     }
 
+    pub fn get_db(&self) -> Db {
+        self.db.clone()
+    }
+
     fn calculate_sha256(path: &std::path::Path) -> Result<String, String> {
         let file = std::fs::File::open(path).map_err(|e| format!("Failed to open file for checksum: {}", e))?;
         let mut reader = BufReader::new(file);

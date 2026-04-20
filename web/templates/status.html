@@ -10,8 +10,13 @@
     <div class='container'>
         <header>
             <h1>Cron Task Scheduler</h1>
-            <div style='display: flex; align-items: center; color: var(--text-muted); font-size: 0.875rem;'>
-                <span class='dot'></span> System Online
+            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
+                <div style='display: flex; align-items: center; color: var(--text-muted); font-size: 0.875rem;'>
+                    <span class='dot'></span> System Online
+                </div>
+                <div style="color: var(--text-muted); font-size: 0.875rem;">
+                    Logged in as <strong>{{user}}</strong> | <a href="/logout" style="color: var(--accent); text-decoration: none;">Logout</a>
+                </div>
             </div>
         </header>
         <div class='table-container'>
