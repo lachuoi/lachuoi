@@ -213,30 +213,34 @@ pub async fn status_page_handler(
     
     let mut rows = String::new();
     for task in tasks {
-        let mut status_class = if task.enabled { "bg-green-50 text-green-700 border-green-200" } else { "bg-red-50 text-red-700 border-red-200" };
+        let mut status_class = if task.enabled { 
+            "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800" 
+        } else { 
+            "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800" 
+        };
         let mut status_text = if task.enabled { "Active" } else { "Paused" };
 
         if task.enabled && task.last_failed {
-            status_class = "bg-red-50 text-red-700 border-red-200";
+            status_class = "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800";
             status_text = "Failed";
         }
 
         let last_run = format_relative_time(&task.last_run);
-        let duration = task.last_duration_ms.map(|ms| format!("<span class='ml-1 text-xs text-blue-600 font-bold'>({}ms)</span>", ms)).unwrap_or_default();
+        let duration = task.last_duration_ms.map(|ms| format!("<span class='ml-1 text-xs text-blue-600 dark:text-blue-400 font-bold'>({}ms)</span>", ms)).unwrap_or_default();
         
         let toggle_btn = if task.enabled {
-            format!("<button class='px-3 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-600 hover:text-white transition-colors' onclick='toggleTask(\"{}\", false)'>Disable</button>", task.id)
+            format!("<button class='px-3 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-600 hover:text-white dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-600 transition-colors' onclick='toggleTask(\"{}\", false)'>Disable</button>", task.id)
         } else {
-            format!("<button class='px-3 py-1 text-xs font-semibold text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-600 hover:text-white transition-colors' onclick='toggleTask(\"{}\", true)'>Enable</button>", task.id)
+            format!("<button class='px-3 py-1 text-xs font-semibold text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-600 hover:text-white dark:bg-green-900/20 dark:border-green-800 dark:hover:bg-green-600 transition-colors' onclick='toggleTask(\"{}\", true)'>Enable</button>", task.id)
         };
 
         rows.push_str(&format!(
-            "<tr class='border-b border-gray-100 hover:bg-gray-50 transition-colors'>
-                <td class='px-4 py-3 align-middle text-sm font-bold text-gray-900'>{name}</td>
-                <td class='px-4 py-3 align-middle text-xs'><span class='bg-gray-100 text-gray-600 px-2 py-1 rounded font-medium uppercase tracking-wider'>{t_type}</span></td>
-                <td class='px-4 py-3 align-middle font-mono text-blue-600 text-xs'>{cron}</td>
-                <td class='px-4 py-3 align-middle text-gray-600 text-sm'>{tz}</td>
-                <td class='px-4 py-3 align-middle text-sm text-gray-500'>{last} {dur}</td>
+            "<tr class='border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors'>
+                <td class='px-4 py-3 align-middle text-sm font-bold text-gray-900 dark:text-slate-100'>{name}</td>
+                <td class='px-4 py-3 align-middle text-xs'><span class='bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 px-2 py-1 rounded font-medium uppercase tracking-wider'>{t_type}</span></td>
+                <td class='px-4 py-3 align-middle font-mono text-blue-600 dark:text-blue-400 text-xs'>{cron}</td>
+                <td class='px-4 py-3 align-middle text-gray-600 dark:text-slate-400 text-sm'>{tz}</td>
+                <td class='px-4 py-3 align-middle text-sm text-gray-500 dark:text-slate-500' title='{raw_run}'>{last} {dur}</td>
                 <td class='px-4 py-3 align-middle'><span class='px-2 py-1 text-[10px] uppercase font-bold rounded-full border {s_class}'>{s_text}</span></td>
                 <td class='px-4 py-3 align-middle'>{btn}</td>
             </tr>",
@@ -245,6 +249,7 @@ pub async fn status_page_handler(
             cron = task.cron,
             tz = task.timezone,
             last = last_run,
+            raw_run = task.last_run.as_deref().unwrap_or("Never"),
             dur = duration,
             s_class = status_class,
             s_text = status_text,
