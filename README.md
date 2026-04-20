@@ -115,4 +115,4 @@ podman run -p 3000:3000 --env-file .env task-scheduler
 ---
 
 ## 📄 License
-Internal proprietary engine. All rights reserved.
+MIT or Apache 2.0. Copyright (c) 2026 Seungjin Kim.
