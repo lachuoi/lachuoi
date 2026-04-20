@@ -35,11 +35,8 @@ use crate::db::Db;
 
 use std::pin::Pin;
 use std::future::Future;
-
 // Type alias for task handlers - functions that execute when a task runs
 type TaskHandler = Arc<dyn Fn(Uuid, Db, tokio::sync::broadcast::Sender<String>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync>;
-
-use std::io::{Read, Write};
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -410,48 +407,58 @@ impl Scheduler {
 
     async fn register_wasm_handler(&self, task_id: Uuid, wasm_path: String, task_name: String, args: Option<Vec<String>>, expected_sha256: Option<String>) -> Result<(), String> {
         let engine = self.wasm_engine.clone();
-        let full_path = if std::path::Path::new(&wasm_path).is_absolute() {
-            std::path::PathBuf::from(&wasm_path)
+        
+        let binary = if wasm_path.starts_with("https://") {
+            println!("Downloading WASM for task '{}' from {}...", task_name, wasm_path);
+            let response = reqwest::get(&wasm_path).await
+                .map_err(|e| format!("Failed to download WASM from {}: {}", wasm_path, e))?;
+            
+            if !response.status().is_success() {
+                return Err(format!("Failed to download WASM from {}: Status {}", wasm_path, response.status()));
+            }
+
+            let bytes = response.bytes().await
+                .map_err(|e| format!("Failed to read WASM response body: {}", e))?;
+            
+            bytes.to_vec()
         } else {
-            self.plugins_dir.join(&wasm_path)
+            let full_path = if std::path::Path::new(&wasm_path).is_absolute() {
+                std::path::PathBuf::from(&wasm_path)
+            } else {
+                self.plugins_dir.join(&wasm_path)
+            };
+            
+            tokio::fs::read(&full_path).await
+                .map_err(|e| format!("Failed to read WASM file at {:?}: {}", full_path, e))?
         };
 
-        // Verify SHA256 at registration (server start / config sync)
+        // Verify SHA256
         if let Some(expected) = &expected_sha256 {
-            let actual = Self::calculate_sha256(&full_path)?;
+            let mut hasher = Sha256::new();
+            hasher.update(&binary);
+            let result = hasher.finalize();
+            let actual = result.iter().map(|b| format!("{:02x}", b)).collect::<String>();
+            
             if actual != *expected {
-                return Err(format!("SHA256 mismatch for task '{}' at registration: expected {}, got {}", task_name, expected, actual));
+                return Err(format!("SHA256 mismatch for task '{}': expected {}, got {}", task_name, expected, actual));
             }
+            println!("SHA256 verified for task '{}'", task_name);
+        } else {
+            println!("Warning: No SHA256 provided for task '{}'. This is insecure.", task_name);
         }
 
         let path_for_error = wasm_path.clone();
 
         let handler = move |log_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<String>| {
             let engine = engine.clone();
-            let path = full_path.clone();
-            let err_path = path_for_error.clone();
             let name = task_name.clone();
             let args = args.clone();
-            let expected_sha256 = expected_sha256.clone();
+            let binary = binary.clone();
+            let err_path = path_for_error.clone();
 
             Box::pin(async move {
-                let binary = tokio::fs::read(&path).await.map_err(|e| format!("Failed to read WASM file for task '{}': {}", name, e))?;
-
-                // Verify SHA256 if expected
-                if let Some(expected) = expected_sha256 {
-                    let mut hasher = Sha256::new();
-                    hasher.update(&binary);
-                    let result = hasher.finalize();
-                    let actual = result.iter().map(|b| format!("{:02x}", b)).collect::<String>();
-                    
-                    if actual != expected {
-                        let err_msg = format!("SHA256 mismatch for task '{}' at runtime: expected {}, got {}", name, expected, actual);
-                        return Err(err_msg);
-                    }
-                }
-
                 let resolved_args = Self::resolve_args(args).await;
-                if let Err(e) = Self::run_wasm_binary(&engine, &binary, path.to_str().unwrap_or(&err_path), &name, log_sender, resolved_args, log_id, db).await {
+                if let Err(e) = Self::run_wasm_binary(&engine, &binary, &err_path, &name, log_sender, resolved_args, log_id, db).await {
                     let err_msg = format!("Error executing WASM task: {}", e);
                     eprintln!("{}", err_msg);
                     Err(err_msg)

@@ -5,8 +5,9 @@ A high-performance, distributed task management engine built with Rust. This sch
 ## 🚀 Key Features
 
 - **Hybrid Execution**: Run native Rust tasks or secure, sandboxed WASM components.
-- **WASM Security**: Mandatory SHA256 checksum verification for all WASM binaries.
-- **Modern Dashboard**: Responsive UI built with Tailwind CSS and Inter typography.
+- **Remote WASM**: Support for downloading WASM binaries directly from HTTPS URLs with mandatory verification.
+- **WASM Security**: Mandatory SHA256 checksum verification for all WASM binaries (local or remote).
+- **Modern Dashboard**: Responsive UI built with Tailwind CSS, featuring **Dark/Light theme** support.
 - **Real-time Monitoring**: Live execution logs and status updates via Server-Sent Events (SSE).
 - **Persistent State**: Database-backed sessions and execution history (Turso/libSQL).
 - **Zero-Downtime Reloads**: Hot-reload `cron.toml` configuration without stopping the service.
@@ -49,7 +50,7 @@ cron = "0 * * * * *"
 timezone = "UTC"
 type = "native"
 
-# WASM Plugin Task
+# WASM Plugin Task (Local)
 [[task]]
 name = "weather-station"
 cron = "0 */10 * * * *"
@@ -58,6 +59,16 @@ type = "wasm"
 payload = "weather.wasm"
 sha256 = "ad677d5c7c136f862aed95f61879d0b0bb80cfb6f9921..."
 args = ["--city", "Seoul"]
+
+# WASM Plugin Task (Remote)
+[[task]]
+name = "github-stats"
+cron = "0 0 * * * *"
+timezone = "UTC"
+type = "wasm"
+payload = "https://example.com/plugins/github.wasm"
+sha256 = "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd328..."
+
 ```
 
 ---
