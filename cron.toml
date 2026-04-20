@@ -20,7 +20,7 @@ sha256 = "2e45e356ee4a7587927d61a898e493af8507a26dc6c05413898100e90dc39239"
 
 [[task]]
 name = "weather-station"
-cron = "0 * * * * *"
+cron = "0 */30 * * * *"
 timezone = "Asia/Seoul"
 type = "wasm"
 payload = "weather_station.wasm"

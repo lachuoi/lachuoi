@@ -9,11 +9,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
-        @keyframes pulse-custom {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.5; transform: scale(1.1); }
-        }
-        .animate-pulse-custom { animation: pulse-custom 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
     </style>
 </head>
 <body class="bg-slate-50 min-h-screen text-slate-900">
@@ -26,10 +21,6 @@
             </div>
             
             <div class="flex flex-col items-end gap-2 text-sm">
-                <div class="flex items-center bg-white px-3 py-1.5 rounded-full shadow-sm border border-slate-200">
-                    <span class="w-2 h-2 bg-emerald-500 rounded-full mr-2 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse-custom"></span>
-                    <span class="text-slate-600 font-medium">System Online</span>
-                </div>
                 <div class="text-slate-500">
                     Logged in as <span class="font-bold text-slate-800">{{user}}</span>
                     <span class="mx-2 text-slate-300">|</span>
