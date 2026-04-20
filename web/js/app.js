@@ -9,25 +9,27 @@ function formatRelativeTime(lastRunRfc3339) {
     const now = new Date();
     const diffSeconds = Math.floor((now - lastRun) / 1000);
 
+    if (isNaN(lastRun.getTime())) return 'Invalid Date';
     if (diffSeconds < 0) return 'Just now';
-    if (diffSeconds < 60) return `${diffSeconds} seconds ago`;
-    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)} minutes ago`;
-    if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)} hours ago`;
-    return lastRun.toLocaleString();
+    if (diffSeconds < 60) return `${diffSeconds}s ago`;
+    if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
+    if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
+    return lastRun.toLocaleTimeString();
 }
 
 eventSource.addEventListener('log', (event) => {
     const entry = document.createElement('div');
-    entry.className = 'log-entry';
+    entry.className = 'mb-1 flex gap-3 text-xs md:text-sm';
     
     // Check if it's an error message
     const isError = event.data.toLowerCase().includes('failed') || event.data.toLowerCase().includes('error');
-    if (isError) {
-        entry.classList.add('log-error');
-    }
+    const textColor = isError ? 'text-red-400 font-medium' : 'text-slate-300';
     
     const time = new Date().toLocaleTimeString();
-    entry.innerHTML = `<span class="log-time">[${time}]</span> ${event.data}`;
+    entry.innerHTML = `
+        <span class="text-slate-500 shrink-0 font-medium select-none">[${time}]</span> 
+        <span class="${textColor}">${event.data}</span>
+    `;
     
     logsDiv.appendChild(entry);
     logsDiv.scrollTop = logsDiv.scrollHeight;
@@ -42,27 +44,32 @@ eventSource.addEventListener('status', (event) => {
     let rows = '';
     
     tasks.forEach(task => {
-        let statusClass = task.enabled ? 'status-enabled' : 'status-disabled';
+        let statusClass = task.enabled ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-700 border-red-200';
         let statusText = task.enabled ? 'Active' : 'Paused';
         
         if (task.enabled && task.last_failed) {
-            statusClass = 'status-disabled'; // Use red for failed
+            statusClass = 'bg-red-50 text-red-700 border-red-200';
             statusText = 'Failed';
         }
 
         const lastRunStr = formatRelativeTime(task.last_run);
         const durationStr = (task.last_duration_ms !== null && task.last_duration_ms !== undefined) 
-            ? `<span class='duration'>(${task.last_duration_ms}ms)</span>` 
+            ? `<span class='ml-1 text-xs text-blue-600 font-bold'>(${task.last_duration_ms}ms)</span>` 
             : '';
         
+        const toggleBtn = task.enabled 
+            ? `<button class='px-3 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-600 hover:text-white transition-all duration-200' onclick='toggleTask("${task.id}", false)'>Disable</button>`
+            : `<button class='px-3 py-1 text-xs font-semibold text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-600 hover:text-white transition-all duration-200' onclick='toggleTask("${task.id}", true)'>Enable</button>`;
+
         rows += `
-            <tr>
-                <td><strong>${task.name}</strong></td>
-                <td><span class='badge type-badge'>${task.task_type}</span></td>
-                <td><code>${task.cron}</code></td>
-                <td>${task.timezone}</td>
-                <td class='time-cell'>${lastRunStr} ${durationStr}</td>
-                <td><span class='status-pill ${statusClass}'>${statusText}</span></td>
+            <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                <td class="px-4 py-3 align-middle text-sm font-bold text-gray-900">${task.name}</td>
+                <td class="px-4 py-3 align-middle text-xs"><span class="bg-gray-100 text-gray-600 px-2 py-1 rounded font-medium uppercase tracking-wider">${task.task_type}</span></td>
+                <td class="px-4 py-3 align-middle font-mono text-blue-600 text-xs">${task.cron}</td>
+                <td class="px-4 py-3 align-middle text-gray-600 text-sm">${task.timezone}</td>
+                <td class="px-4 py-3 align-middle text-sm text-gray-500" title="${task.last_run || 'Never'}">${lastRunStr} ${durationStr}</td>
+                <td class="px-4 py-3 align-middle"><span class="px-2 py-1 text-[10px] uppercase font-bold rounded-full border ${statusClass}">${statusText}</span></td>
+                <td class="px-4 py-3 align-middle">${toggleBtn}</td>
             </tr>
         `;
     });
@@ -72,13 +79,35 @@ eventSource.addEventListener('status', (event) => {
     }
 });
 
+async function toggleTask(taskId, enabled) {
+    try {
+        const response = await fetch(`/tasks/${taskId}/toggle`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ enabled })
+        });
+        
+        if (!response.ok) {
+            alert('Failed to update task status');
+        }
+    } catch (error) {
+        console.error('Error toggling task:', error);
+        alert('Error toggling task status');
+    }
+}
+
 // For backward compatibility or fallback messages without explicit event type
 eventSource.onmessage = (event) => {
     if (!event.type || event.type === 'message') {
         const entry = document.createElement('div');
-        entry.className = 'log-entry';
+        entry.className = 'mb-1 flex gap-3 text-xs md:text-sm';
         const time = new Date().toLocaleTimeString();
-        entry.innerHTML = `<span class="log-time">[${time}]</span> ${event.data}`;
+        entry.innerHTML = `
+            <span class="text-slate-500 shrink-0 font-medium select-none">[${time}]</span> 
+            <span class="text-slate-400">${event.data}</span>
+        `;
         logsDiv.appendChild(entry);
         logsDiv.scrollTop = logsDiv.scrollHeight;
     }
@@ -86,10 +115,10 @@ eventSource.onmessage = (event) => {
 
 eventSource.onopen = () => {
     statusIndicator.innerText = 'Connected';
-    statusIndicator.style.color = 'var(--success)';
+    statusIndicator.className = 'text-xs font-bold text-emerald-400';
 };
 
 eventSource.onerror = () => {
     statusIndicator.innerText = 'Disconnected - retrying...';
-    statusIndicator.style.color = 'var(--danger)';
+    statusIndicator.className = 'text-xs font-bold text-red-400';
 };

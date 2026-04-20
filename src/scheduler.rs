@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{Utc, DateTime};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -233,6 +233,16 @@ impl Scheduler {
             }
 
             if !should_update {
+                // For native tasks, we still need to ensure the handler is registered
+                // because it might have been loaded from DB without a handler
+                if task_cfg.task_type == "native" {
+                    if let Some(id) = existing_tasks.get(&task_cfg.name) {
+                        if let Some(handler) = native_handlers.get(&task_cfg.name) {
+                            let handler = Arc::clone(handler);
+                            self.register_handler(*id, move |log_id, db, log_sender| handler(log_id, db, log_sender)).await?;
+                        }
+                    }
+                }
                 continue;
             }
 
@@ -307,6 +317,10 @@ impl Scheduler {
     pub async fn load_tasks(&self) -> Result<Vec<(Uuid, String, String)>, String> {
         let db_tasks = self.db.get_tasks().await
             .map_err(|e| format!("Failed to load tasks from DB: {}", e))?;
+        
+        // Fetch latest run info from logs
+        let latest_logs = self.db.get_latest_task_logs().await
+            .unwrap_or_default();
 
         let mut tasks = self.tasks.write().await;
         let mut loaded = Vec::new();
@@ -315,7 +329,15 @@ impl Scheduler {
                 .map_err(|e| format!("Invalid timezone in DB: {}", e))?;
 
             match ScheduledTask::from_db(id, name.clone(), cron_expr, timezone, task_type.clone(), payload.clone(), args.clone(), sha256.clone(), enabled) {
-                Ok(task) => {
+                Ok(mut task) => {
+                    // Apply historical state
+                    if let Some((run_at_str, duration_ms)) = latest_logs.get(&id) {
+                        if let Ok(run_at) = DateTime::parse_from_rfc3339(run_at_str) {
+                            task.last_run = Some(run_at.with_timezone(&task.timezone));
+                        }
+                        task.last_duration = duration_ms.map(|d| d as u64);
+                    }
+
                     tasks.insert(id, task);
                     loaded.push((id, name.clone(), task_type.clone()));
 
@@ -605,6 +627,11 @@ impl Scheduler {
 
     pub async fn broadcast_status(&self) {
         let status = self.get_tasks_status().await;
+        for s in &status {
+            if s.last_duration_ms.is_some() {
+                // println!("DEBUG: Broadcasting task '{}' with duration {}ms", s.name, s.last_duration_ms.unwrap());
+            }
+        }
         let _ = self.status_sender.send(status);
     }
 
@@ -651,18 +678,16 @@ impl Scheduler {
 
                 let now_tz = Utc::now().with_timezone(&task.timezone);
 
-                // Check if we should run based on the schedule
-                if let Some(last_run) = task.last_run {
-                    if now_tz.signed_duration_since(last_run).num_seconds() < 60 {
-                        continue;
-                    }
-                }
-
                 if task.should_run() {
+                    println!("Task '{}' triggered (last run was: {:?})", task.name, task.last_run);
                     task.last_run = Some(now_tz);
                     tasks_to_run.push((*id, task.name.clone()));
                 }
             }
+        }
+
+        if !tasks_to_run.is_empty() {
+            self_arc.broadcast_status().await;
         }
 
         // Execute handlers for due tasks
@@ -674,6 +699,7 @@ impl Scheduler {
                 let tasks_ref = Arc::clone(&self.tasks);
                 let name = task_name.clone();
                 let log_sender = self.log_sender.clone();
+                let self_arc_clone = Arc::clone(&self_arc);
 
                 tokio::spawn(async move {
                     if let Ok(log_id) = db.log_execution_start(task_id).await {
@@ -693,23 +719,24 @@ impl Scheduler {
                             let _ = log_sender.send(err_msg);
                         }
                         
-                        let duration = start.elapsed().as_millis();
-                        let finish_msg = format!("[{}] Task finished in {}ms", name, duration);
+                        let duration_ms = start.elapsed().as_millis() as u64;
+                        let finish_msg = format!("[{}] Task finished in {}ms", name, duration_ms);
                         println!("{}", finish_msg);
                         let _ = db.save_log_line(log_id, &finish_msg).await;
                         let _ = log_sender.send(finish_msg);
                         
-                        let _ = db.log_execution_finish(log_id, duration).await;
+                        let _ = db.log_execution_finish(log_id, duration_ms).await;
                         
-                        // Update in-memory duration
+                        // Update in-memory duration and status
                         {
                             let mut tasks = tasks_ref.write().await;
                             if let Some(task) = tasks.get_mut(&task_id) {
-                                task.last_run = Some(Utc::now().with_timezone(&task.timezone));
-                                task.last_duration = Some(duration);
+                                task.last_duration = Some(duration_ms);
                                 task.last_failed = is_failed;
                             }
                         }
+                        // Broadcast update immediately
+                        self_arc_clone.broadcast_status().await;
                     }
                 });
             }

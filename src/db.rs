@@ -1,10 +1,18 @@
 use chrono::Utc;
 use libsql::{Builder, Connection};
 use uuid::Uuid;
+use tower_sessions::{session::{Id, Record}, SessionStore};
+use async_trait::async_trait;
 
 #[derive(Clone)]
 pub struct Db {
     conn: Connection,
+}
+
+impl std::fmt::Debug for Db {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Db").finish()
+    }
 }
 
 impl Db {
@@ -53,11 +61,7 @@ impl Db {
             )
             .await?;
 
-        // Recreate logs with duration instead of status
         // We use duration_ms (NULL = not finished/crashed)
-        let _ = self.conn.execute("DROP TABLE IF EXISTS cron_outputs", ()).await;
-        let _ = self.conn.execute("DROP TABLE IF EXISTS cron_logs", ()).await;
-        
         self.conn
             .execute(
                 "CREATE TABLE IF NOT EXISTS cron_logs (
@@ -79,6 +83,17 @@ impl Db {
                 output TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY(log_id) REFERENCES cron_logs(id)
+            )",
+                (),
+            )
+            .await?;
+
+        self.conn
+            .execute(
+                "CREATE TABLE IF NOT EXISTS cron_sessions (
+                id TEXT PRIMARY KEY NOT NULL,
+                record BLOB NOT NULL,
+                expiry_date INTEGER NOT NULL
             )",
                 (),
             )
@@ -233,7 +248,7 @@ impl Db {
     pub async fn log_execution_finish(
         &self,
         log_id: Uuid,
-        duration_ms: u128,
+        duration_ms: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
             "UPDATE cron_logs SET duration_ms = ? WHERE id = ?",
@@ -249,5 +264,72 @@ impl Db {
 
     pub fn get_conn(&self) -> Connection {
         self.conn.clone()
+    }
+
+    pub async fn get_latest_task_logs(
+        &self,
+    ) -> Result<std::collections::HashMap<Uuid, (String, Option<i64>)>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut rows = self.conn.query(
+            "SELECT task_id, run_at, duration_ms FROM cron_logs WHERE (task_id, run_at) IN (SELECT task_id, MAX(run_at) FROM cron_logs WHERE duration_ms IS NOT NULL GROUP BY task_id)",
+            ()
+        ).await?;
+
+        let mut results = std::collections::HashMap::new();
+        while let Some(row) = rows.next().await? {
+            let task_id_str: String = row.get(0)?;
+            let run_at: String = row.get(1)?;
+            let duration_ms: Option<i64> = row.get(2)?;
+
+            if let Ok(task_id) = Uuid::parse_str(&task_id_str) {
+                results.insert(task_id, (run_at, duration_ms));
+            }
+        }
+        Ok(results)
+    }
+}
+
+#[async_trait]
+impl SessionStore for Db {
+    async fn save(&self, record: &Record) -> tower_sessions::session_store::Result<()> {
+        let record_data = serde_json::to_vec(record)
+            .map_err(|e| tower_sessions::session_store::Error::Encode(e.to_string()))?;
+        
+        let expiry = record.expiry_date.unix_timestamp();
+
+        self.conn.execute(
+            "INSERT OR REPLACE INTO cron_sessions (id, record, expiry_date) VALUES (?, ?, ?)",
+            libsql::params![record.id.to_string(), record_data, expiry]
+        ).await.map_err(|e| tower_sessions::session_store::Error::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn load(&self, id: &Id) -> tower_sessions::session_store::Result<Option<Record>> {
+        let mut rows = self.conn.query(
+            "SELECT record FROM cron_sessions WHERE id = ? AND expiry_date > ?",
+            libsql::params![id.to_string(), Utc::now().timestamp()]
+        ).await.map_err(|e| tower_sessions::session_store::Error::Backend(e.to_string()))?;
+
+        if let Some(row) = rows.next().await.map_err(|e| tower_sessions::session_store::Error::Backend(e.to_string()))? {
+            let record_data: Vec<u8> = row.get(0).map_err(|e| tower_sessions::session_store::Error::Backend(e.to_string()))?;
+            let record: Record = serde_json::from_slice(&record_data)
+                .map_err(|e| tower_sessions::session_store::Error::Decode(e.to_string()))?;
+            Ok(Some(record))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn delete(&self, id: &Id) -> tower_sessions::session_store::Result<()> {
+        self.conn.execute(
+            "DELETE FROM cron_sessions WHERE id = ?",
+            libsql::params![id.to_string()]
+        ).await.map_err(|e| tower_sessions::session_store::Error::Backend(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn create(&self, record: &mut Record) -> tower_sessions::session_store::Result<()> {
+        self.save(record).await
     }
 }

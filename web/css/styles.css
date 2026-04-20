@@ -95,3 +95,32 @@ code { background: #0f172a; color: var(--accent); padding: 4px 8px; border-radiu
 .log-time { color: #64748b; margin-right: 10px; }
 .log-error { color: #f87171; font-weight: 500; }
 
+.btn {
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+.btn-sm { padding: 4px 8px; }
+.btn-outline-danger {
+    color: var(--danger);
+    background: transparent;
+    border-color: var(--danger);
+}
+.btn-outline-danger:hover {
+    background: var(--danger);
+    color: white;
+}
+.btn-outline-success {
+    color: var(--success);
+    background: transparent;
+    border-color: var(--success);
+}
+.btn-outline-success:hover {
+    background: var(--success);
+    color: white;
+}
+

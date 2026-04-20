@@ -12,7 +12,7 @@ pub struct TaskStatus {
     pub timezone: String,
     pub task_type: String,
     pub last_run: Option<String>,
-    pub last_duration_ms: Option<u128>,
+    pub last_duration_ms: Option<u64>,
     pub last_failed: bool,
     pub enabled: bool,
 }
@@ -29,7 +29,7 @@ pub struct ScheduledTask {
     pub sha256: Option<String>,
     pub schedule: Schedule,
     pub last_run: Option<DateTime<Tz>>,
-    pub last_duration: Option<u128>,
+    pub last_duration: Option<u64>,
     pub last_failed: bool,
     pub enabled: bool,
 }
@@ -118,21 +118,22 @@ impl ScheduledTask {
         self.schedule.upcoming(self.timezone).next()
     }
 
-    // Check if the task should run now based on its timezone
+    // Check if the task should run now based on its timezone and last run
     pub fn should_run(&self) -> bool {
         if !self.enabled {
             return false;
         }
 
         let now = Utc::now().with_timezone(&self.timezone);
+        
+        // Use last_run as the starting point, or now - 1 minute if it never ran
+        // We subtract a small buffer (1ms) to ensure that if a task is scheduled exactly on the second,
+        // and last_run was that exact second, we still find the NEXT occurrence.
+        let start_time = self.last_run.unwrap_or_else(|| now - Duration::minutes(1));
 
-        // Find the most recent scheduled time
-        if let Some(upcoming) = self
-            .schedule
-            .after(&(now - Duration::minutes(1)))
-            .next()
-        {
-            return upcoming <= now;
+        if let Some(next_occurrence) = self.schedule.after(&start_time).next() {
+            // If the next scheduled occurrence is in the past or exactly now, it's time to run.
+            return next_occurrence <= now;
         }
 
         false

@@ -1,5 +1,6 @@
-use axum::{Json, extract::{State, Query}, response::{Html, Redirect, IntoResponse}, response::sse::{Event, Sse}, http::StatusCode};
+use axum::{Json, extract::{State, Query, Path}, response::{Html, Redirect, IntoResponse}, response::sse::{Event, Sse}, http::StatusCode};
 use std::sync::Arc;
+use uuid::Uuid;
 use crate::scheduler::Scheduler;
 use crate::task::TaskStatus;
 use tokio_stream::StreamExt;
@@ -158,6 +159,25 @@ pub async fn get_tasks_handler(
     Ok(Json(scheduler.get_tasks_status().await))
 }
 
+#[derive(Deserialize)]
+pub struct ToggleRequest {
+    pub enabled: bool,
+}
+
+pub async fn toggle_task_handler(
+    State(scheduler): State<Arc<Scheduler>>,
+    Path(task_id): Path<Uuid>,
+    session: Session,
+    Json(payload): Json<ToggleRequest>,
+) -> impl IntoResponse {
+    if session.get::<i64>(USER_SESSION_KEY).await.unwrap().is_none() {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+    }
+
+    scheduler.set_task_enabled(task_id, payload.enabled).await;
+    StatusCode::OK.into_response()
+}
+
 pub async fn login_page_handler(session: Session) -> impl IntoResponse {
     if session.get::<i64>(USER_SESSION_KEY).await.unwrap().is_some() {
         return Redirect::to("/task-status").into_response();
@@ -193,25 +213,32 @@ pub async fn status_page_handler(
     
     let mut rows = String::new();
     for task in tasks {
-        let mut status_class = if task.enabled { "status-enabled" } else { "status-disabled" };
+        let mut status_class = if task.enabled { "bg-green-50 text-green-700 border-green-200" } else { "bg-red-50 text-red-700 border-red-200" };
         let mut status_text = if task.enabled { "Active" } else { "Paused" };
 
         if task.enabled && task.last_failed {
-            status_class = "status-disabled";
+            status_class = "bg-red-50 text-red-700 border-red-200";
             status_text = "Failed";
         }
 
         let last_run = format_relative_time(&task.last_run);
-        let duration = task.last_duration_ms.map(|ms| format!("<span class='duration'>({}ms)</span>", ms)).unwrap_or_default();
+        let duration = task.last_duration_ms.map(|ms| format!("<span class='ml-1 text-xs text-blue-600 font-bold'>({}ms)</span>", ms)).unwrap_or_default();
         
+        let toggle_btn = if task.enabled {
+            format!("<button class='px-3 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-600 hover:text-white transition-colors' onclick='toggleTask(\"{}\", false)'>Disable</button>", task.id)
+        } else {
+            format!("<button class='px-3 py-1 text-xs font-semibold text-green-600 bg-green-50 border border-green-200 rounded-md hover:bg-green-600 hover:text-white transition-colors' onclick='toggleTask(\"{}\", true)'>Enable</button>", task.id)
+        };
+
         rows.push_str(&format!(
-            "<tr>
-                <td><strong>{name}</strong></td>
-                <td><span class='badge type-badge'>{t_type}</span></td>
-                <td><code>{cron}</code></td>
-                <td>{tz}</td>
-                <td class='time-cell'>{last} {dur}</td>
-                <td><span class='status-pill {s_class}'>{s_text}</span></td>
+            "<tr class='border-b border-gray-100 hover:bg-gray-50 transition-colors'>
+                <td class='px-4 py-3 align-middle text-sm font-bold text-gray-900'>{name}</td>
+                <td class='px-4 py-3 align-middle text-xs'><span class='bg-gray-100 text-gray-600 px-2 py-1 rounded font-medium uppercase tracking-wider'>{t_type}</span></td>
+                <td class='px-4 py-3 align-middle font-mono text-blue-600 text-xs'>{cron}</td>
+                <td class='px-4 py-3 align-middle text-gray-600 text-sm'>{tz}</td>
+                <td class='px-4 py-3 align-middle text-sm text-gray-500'>{last} {dur}</td>
+                <td class='px-4 py-3 align-middle'><span class='px-2 py-1 text-[10px] uppercase font-bold rounded-full border {s_class}'>{s_text}</span></td>
+                <td class='px-4 py-3 align-middle'>{btn}</td>
             </tr>",
             name = task.name,
             t_type = task.task_type,
@@ -220,7 +247,8 @@ pub async fn status_page_handler(
             last = last_run,
             dur = duration,
             s_class = status_class,
-            s_text = status_text
+            s_text = status_text,
+            btn = toggle_btn
         ));
     }
 

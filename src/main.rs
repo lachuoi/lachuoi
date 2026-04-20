@@ -153,7 +153,7 @@ async fn main() {
     });
 
     // 7. Start the web server (blocking)
-    let web_server = WebServer::new(Arc::clone(&scheduler), 9130);
+    let web_server = WebServer::new(Arc::clone(&scheduler), db.clone(), 9130);
     if let Err(e) = web_server.run().await {
         eprintln!("Web server error: {}", e);
     }

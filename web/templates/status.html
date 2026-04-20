@@ -1,51 +1,87 @@
 <!DOCTYPE html>
-<html lang='en'>
+<html lang="en">
 <head>
-    <meta charset='UTF-8'>
-    <meta name='viewport' content='width=device-width, initial-scale=1.0'>
-    <title>Cron Dashboard</title>
-    <link rel="stylesheet" href="/static/css/styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Cron Scheduler</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        @keyframes pulse-custom {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.1); }
+        }
+        .animate-pulse-custom { animation: pulse-custom 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    </style>
 </head>
-<body>
-    <div class='container'>
-        <header>
-            <h1>Cron Task Scheduler</h1>
-            <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px;">
-                <div style='display: flex; align-items: center; color: var(--text-muted); font-size: 0.875rem;'>
-                    <span class='dot'></span> System Online
+<body class="bg-slate-50 min-h-screen text-slate-900">
+    <div class="max-w-6xl mx-auto px-4 py-8">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+                <h1 class="text-3xl font-extrabold tracking-tight text-slate-900">Cron Scheduler</h1>
+                <p class="text-slate-500 mt-1">Distributed Task Management Dashboard</p>
+            </div>
+            
+            <div class="flex flex-col items-end gap-2 text-sm">
+                <div class="flex items-center bg-white px-3 py-1.5 rounded-full shadow-sm border border-slate-200">
+                    <span class="w-2 h-2 bg-emerald-500 rounded-full mr-2 shadow-[0_0_8px_rgba(16,185,129,0.6)] animate-pulse-custom"></span>
+                    <span class="text-slate-600 font-medium">System Online</span>
                 </div>
-                <div style="color: var(--text-muted); font-size: 0.875rem;">
-                    Logged in as <strong>{{user}}</strong> | <a href="/logout" style="color: var(--accent); text-decoration: none;">Logout</a>
+                <div class="text-slate-500">
+                    Logged in as <span class="font-bold text-slate-800">{{user}}</span>
+                    <span class="mx-2 text-slate-300">|</span>
+                    <a href="/logout" class="text-blue-600 hover:text-blue-700 font-semibold transition-colors">Logout</a>
                 </div>
             </div>
         </header>
-        <div class='table-container'>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Type</th>
-                        <th>Schedule</th>
-                        <th>Timezone</th>
-                        <th>Last Run</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody id="task-table-body">
-                    {{rows}}
-                </tbody>
-            </table>
-        </div>
 
-        <div class="logs-container">
-            <div class="logs-header">
-                Task Logs (Live)
-                <span id="status-indicator" style="font-size: 0.7rem; color: var(--text-muted);">Connecting...</span>
+        <!-- Main Content -->
+        <main class="space-y-8">
+            <!-- Tasks Table -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200">
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Name</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Schedule</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Timezone</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Last Run</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="task-table-body" class="divide-y divide-slate-100">
+                            {{rows}}
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div id="logs"></div>
-        </div>
+
+            <!-- Logs Section -->
+            <div class="bg-slate-900 rounded-xl shadow-2xl border border-slate-800 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-400 font-bold text-xs uppercase tracking-widest">Live Execution Logs</span>
+                        <span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-bold">REALTIME</span>
+                    </div>
+                    <span id="status-indicator" class="text-xs font-medium transition-colors duration-300">Connecting...</span>
+                </div>
+                <div id="logs" class="p-6 h-[400px] overflow-y-auto font-mono text-sm leading-relaxed scrollbar-thin scrollbar-thumb-slate-700 text-slate-300">
+                    <!-- Logs will appear here -->
+                </div>
+            </div>
+        </main>
+        
+        <footer class="mt-12 pt-8 border-t border-slate-200 text-center text-slate-400 text-sm">
+            &copy; 2026 Task Scheduler Engine. All systems operational.
+        </footer>
     </div>
 
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/app.js?v=11"></script>
 </body>
 </html>
