@@ -1,5 +1,7 @@
 # Cron Task Scheduler
 
+<img src="screenshot.png" alt="Dashboard Screenshot" width="800" style="border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 2rem;">
+
 A high-performance, distributed task management engine built with Rust. This scheduler supports both **native Rust handlers** and **sandboxed WASM plugins**, featuring a real-time web dashboard with GitHub OAuth security and persistent execution history.
 
 ## 🚀 Key Features
