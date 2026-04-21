@@ -17,7 +17,7 @@
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100 transition-colors duration-300">
-    <div class="max-w-6xl mx-auto px-4 py-8">
+    <div id="page-container" class="max-w-6xl mx-auto px-4 py-8 transition-all duration-300">
         <!-- Header -->
         <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div>
@@ -27,6 +27,12 @@
             
             <div class="flex flex-col items-end gap-3 text-sm">
                 <div class="flex items-center gap-3">
+                    <!-- Layout Toggle -->
+                    <button id="layout-toggle" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-600 dark:text-slate-400" title="Toggle Layout">
+                        <svg id="layout-horizontal-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                        <svg id="layout-vertical-icon" class="hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h2m3 0h2a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                    </button>
+
                     <!-- Theme Toggle -->
                     <button id="theme-toggle" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
                         <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5 text-slate-100" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
@@ -43,9 +49,9 @@
         </header>
 
         <!-- Main Content -->
-        <main class="space-y-8">
+        <main id="main-container" class="flex flex-col gap-8 transition-all duration-300">
             <!-- Tasks Table -->
-            <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+            <div id="tasks-section" class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
                 <div class="overflow-x-auto">
                     <table class="w-full text-left border-collapse">
                         <thead>
@@ -91,10 +97,10 @@
             </div>
 
             <!-- Logs Section -->
-            <div class="bg-slate-900 dark:bg-black rounded-xl shadow-2xl border border-slate-800 dark:border-slate-900 overflow-hidden">
+            <div id="logs-section" class="bg-slate-900 dark:bg-black rounded-xl shadow-2xl border border-slate-800 dark:border-slate-900 overflow-hidden">
                 <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
                     <div class="flex items-center gap-2">
-                        <span class="text-slate-400 font-bold text-xs uppercase tracking-widest text-slate-400">Live Execution Logs</span>
+                        <span class="text-slate-400 font-bold text-xs uppercase tracking-widest">Live Execution Logs</span>
                         <span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-bold uppercase">Realtime</span>
                     </div>
                     <span id="status-indicator" class="text-xs font-medium transition-colors duration-300">Connecting...</span>

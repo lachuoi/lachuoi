@@ -229,7 +229,7 @@ impl Scheduler {
                 let tasks = self.tasks.read().await;
                 if let Some(existing) = tasks.get(id) {
                     // Check if config actually changed
-                    if existing.config_equals(&task_cfg.cron, &task_cfg.timezone, &task_cfg.task_type, task_cfg.payload.as_deref(), task_cfg.args.as_deref(), task_cfg.sha256.as_deref()) {
+                    if existing.config_equals(&task_cfg.cron, &task_cfg.timezone, &task_cfg.task_type, task_cfg.payload.as_deref(), task_cfg.args.as_deref(), task_cfg.env.as_ref(), task_cfg.sha256.as_deref()) {
                         should_update = false;
                     } else {
                         // Capture state to preserve it
@@ -274,7 +274,7 @@ impl Scheduler {
                             task.enabled = enabled;
                         }
 
-                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "native", None, None, None, task.enabled).await
+                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "native", None, None, None, None, task.enabled).await
                             .map_err(|e| format!("Failed to save task: {}", e))?;
 
                         self.tasks.write().await.insert(task_id, task);
@@ -286,7 +286,7 @@ impl Scheduler {
                 }
                 "wasm" => {
                     if let Some(payload) = &task_cfg.payload {
-                        let mut task = ScheduledTask::new_wasm(&task_cfg.name, &task_cfg.cron, &task_cfg.timezone, payload, task_cfg.args.clone(), task_cfg.sha256.clone())?;
+                        let mut task = ScheduledTask::new_wasm(&task_cfg.name, &task_cfg.cron, &task_cfg.timezone, payload, task_cfg.args.clone(), task_cfg.env.clone(), task_cfg.sha256.clone())?;
                         task.id = task_id;
 
                         // Preserve state if updating
@@ -297,11 +297,11 @@ impl Scheduler {
                             task.enabled = enabled;
                         }
 
-                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "wasm", Some(payload), task_cfg.args.clone(), task_cfg.sha256.as_deref(), task.enabled).await
+                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "wasm", Some(payload), task_cfg.args.clone(), task_cfg.env.clone(), task_cfg.sha256.as_deref(), task.enabled).await
                             .map_err(|e| format!("Failed to save task: {}", e))?;
 
                         self.tasks.write().await.insert(task_id, task);
-                        self.register_wasm_handler(task_id, payload.to_string(), task_cfg.name.clone(), task_cfg.args.clone(), task_cfg.sha256.clone()).await?;
+                        self.register_wasm_handler(task_id, payload.to_string(), task_cfg.name.clone(), task_cfg.args.clone(), task_cfg.env.clone(), task_cfg.sha256.clone()).await?;
                         println!("Updated WASM task '{}'", task_cfg.name);
                     }
                 }
@@ -321,6 +321,7 @@ impl Scheduler {
             self.remove_task(id).await;
         }
 
+        self.broadcast_status().await;
         Ok(())
     }
 
@@ -335,11 +336,11 @@ impl Scheduler {
 
         let mut tasks = self.tasks.write().await;
         let mut loaded = Vec::new();
-        for (id, name, cron_expr, timezone_str, task_type, payload, args, sha256, enabled) in db_tasks {
+        for (id, name, cron_expr, timezone_str, task_type, payload, args, env, sha256, enabled) in db_tasks {
             let timezone = timezone_str.parse::<Tz>()
                 .map_err(|e| format!("Invalid timezone in DB: {}", e))?;
 
-            match ScheduledTask::from_db(id, name.clone(), cron_expr, timezone, task_type.clone(), payload.clone(), args.clone(), sha256.clone(), enabled) {
+            match ScheduledTask::from_db(id, name.clone(), cron_expr, timezone, task_type.clone(), payload.clone(), args.clone(), env.clone(), sha256.clone(), enabled) {
                 Ok(mut task) => {
                     // Apply historical state
                     if let Some((run_at_str, duration_ms)) = latest_logs.get(&id) {
@@ -355,7 +356,7 @@ impl Scheduler {
                     // If it's a WASM task, automatically register its handler
                     if task_type == "wasm" {
                         if let Some(path) = payload {
-                            self.register_wasm_handler(id, path, name.clone(), args, sha256).await?;
+                            self.register_wasm_handler(id, path, name.clone(), args, env, sha256).await?;
                         }
                     }
                 }
@@ -407,7 +408,7 @@ impl Scheduler {
         Some(resolved)
     }
 
-    async fn register_wasm_handler(&self, task_id: Uuid, wasm_path: String, task_name: String, args: Option<Vec<String>>, expected_sha256: Option<String>) -> Result<(), String> {
+    async fn register_wasm_handler(&self, task_id: Uuid, wasm_path: String, task_name: String, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, expected_sha256: Option<String>) -> Result<(), String> {
         let engine = self.wasm_engine.clone();
         
         let binary = if wasm_path.starts_with("https://") {
@@ -455,12 +456,13 @@ impl Scheduler {
             let engine = engine.clone();
             let name = task_name.clone();
             let args = args.clone();
+            let env = env.clone();
             let binary = binary.clone();
             let err_path = path_for_error.clone();
 
             Box::pin(async move {
                 let resolved_args = Self::resolve_args(args).await;
-                if let Err(e) = Self::run_wasm_binary(&engine, &binary, &err_path, &name, log_sender, resolved_args, log_id, db).await {
+                if let Err(e) = Self::run_wasm_binary(&engine, &binary, &err_path, &name, log_sender, resolved_args, env, log_id, db).await {
                     let err_msg = format!("Error executing WASM task: {}", e);
                     eprintln!("{}", err_msg);
                     Err(err_msg)
@@ -474,16 +476,16 @@ impl Scheduler {
         Ok(())
     }
 
-    async fn run_wasm_binary(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn run_wasm_binary(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         // Check if it's a WASM component (starts with \0asm and version 0x0d)
         if binary.starts_with(&[0, 0x61, 0x73, 0x6d, 0x0d, 0, 1, 0]) {
-            Self::run_wasm_component(engine, binary, wasm_path, task_name, log_sender, args, log_id, db).await
+            Self::run_wasm_component(engine, binary, wasm_path, task_name, log_sender, args, env, log_id, db).await
         } else {
-            Self::run_wasm_module(engine, binary, wasm_path, task_name, log_sender, args, log_id, db).await
+            Self::run_wasm_module(engine, binary, wasm_path, task_name, log_sender, args, env, log_id, db).await
         }
     }
 
-    async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let module = Module::from_binary(engine, binary)?;
 
         struct MyState {
@@ -518,6 +520,12 @@ impl Scheduler {
         }
         builder.args(&full_args);
 
+        if let Some(e) = env {
+            for (k, v) in e {
+                builder.env(&k, &v);
+            }
+        }
+
         let wasi = builder.build_p1();
 
         let mut store = Store::new(engine, MyState { wasi });
@@ -533,7 +541,7 @@ impl Scheduler {
 
         Ok(())    }
 
-    async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let component = Component::from_binary(engine, binary)?;
 
         let mut linker = ComponentLinker::new(engine);
@@ -566,6 +574,12 @@ impl Scheduler {
             full_args.append(&mut a);
         }
         builder.args(&full_args);
+
+        if let Some(e) = env {
+            for (k, v) in e {
+                builder.env(&k, &v);
+            }
+        }
 
         let wasi = builder.build();
 
@@ -622,13 +636,14 @@ impl Scheduler {
         let task = ScheduledTask::new(name, cron_expr, timezone)?;
         let task_id = task.id;
 
-        self.db.save_task(task_id, name, cron_expr, timezone, "native", None, None, None, true).await
+        self.db.save_task(task_id, name, cron_expr, timezone, "native", None, None, None, None, true).await
             .map_err(|e| format!("Failed to save task to DB: {}", e))?;
 
         self.tasks.write().await.insert(task_id, task);
         self.register_handler(task_id, handler).await?;
 
         println!("Registered native task '{}' [{}] with id {}", name, timezone, task_id);
+        self.broadcast_status().await;
         Ok(task_id)
     }
 
@@ -640,18 +655,20 @@ impl Scheduler {
         timezone: &str,
         wasm_path: &str,
         args: Option<Vec<String>>,
+        env: Option<HashMap<String, String>>,
         sha256: Option<String>,
     ) -> Result<Uuid, String> {
-        let task = ScheduledTask::new_wasm(name, cron_expr, timezone, wasm_path, args.clone(), sha256.clone())?;
+        let task = ScheduledTask::new_wasm(name, cron_expr, timezone, wasm_path, args.clone(), env.clone(), sha256.clone())?;
         let task_id = task.id;
 
-        self.db.save_task(task_id, name, cron_expr, timezone, "wasm", Some(wasm_path), args.clone(), sha256.as_deref(), true).await
+        self.db.save_task(task_id, name, cron_expr, timezone, "wasm", Some(wasm_path), args.clone(), env.clone(), sha256.as_deref(), true).await
             .map_err(|e| format!("Failed to save task to DB: {}", e))?;
 
         self.tasks.write().await.insert(task_id, task);
-        self.register_wasm_handler(task_id, wasm_path.to_string(), name.to_string(), args, sha256).await?;
+        self.register_wasm_handler(task_id, wasm_path.to_string(), name.to_string(), args, env, sha256).await?;
 
         println!("Registered WASM task '{}' [{}] with id {}", name, timezone, task_id);
+        self.broadcast_status().await;
         Ok(task_id)
     }
 
@@ -660,6 +677,9 @@ impl Scheduler {
         let _ = self.db.remove_task(task_id).await;
         let task_removed = self.tasks.write().await.remove(&task_id).is_some();
         self.handlers.write().await.remove(&task_id);
+        if task_removed {
+            self.broadcast_status().await;
+        }
         task_removed
     }
 
@@ -668,6 +688,7 @@ impl Scheduler {
         let _ = self.db.update_task_enabled(task_id, enabled).await;
         if let Some(task) = self.tasks.write().await.get_mut(&task_id) {
             task.enabled = enabled;
+            self.broadcast_status().await;
         }
     }
 

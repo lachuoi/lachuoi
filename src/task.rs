@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc, Duration};
 use chrono_tz::Tz;
 use cron::Schedule;
+use std::collections::HashMap;
 use std::str::FromStr;
 use uuid::Uuid;
 
@@ -26,6 +27,7 @@ pub struct ScheduledTask {
     pub task_type: String,
     pub payload: Option<String>,
     pub args: Option<Vec<String>>,
+    pub env: Option<HashMap<String, String>>,
     pub sha256: Option<String>,
     pub schedule: Schedule,
     pub last_run: Option<DateTime<Tz>>,
@@ -55,6 +57,7 @@ impl ScheduledTask {
             task_type: "native".to_string(),
             payload: None,
             args: None,
+            env: None,
             sha256: None,
             schedule,
             last_run: None,
@@ -71,12 +74,14 @@ impl ScheduledTask {
         timezone_str: &str,
         wasm_path: &str,
         args: Option<Vec<String>>,
+        env: Option<HashMap<String, String>>,
         sha256: Option<String>,
     ) -> Result<Self, String> {
         let mut task = Self::new(name, cron_expr, timezone_str)?;
         task.task_type = "wasm".to_string();
         task.payload = Some(wasm_path.to_string());
         task.args = args;
+        task.env = env;
         task.sha256 = sha256;
         Ok(task)
     }
@@ -90,6 +95,7 @@ impl ScheduledTask {
         task_type: String,
         payload: Option<String>,
         args: Option<Vec<String>>,
+        env: Option<HashMap<String, String>>,
         sha256: Option<String>,
         enabled: bool,
     ) -> Result<Self, String> {
@@ -104,6 +110,7 @@ impl ScheduledTask {
             task_type,
             payload,
             args,
+            env,
             sha256,
             schedule,
             last_run: None,
@@ -139,12 +146,13 @@ impl ScheduledTask {
         false
     }
 
-    pub fn config_equals(&self, cron: &str, timezone: &str, task_type: &str, payload: Option<&str>, args: Option<&[String]>, sha256: Option<&str>) -> bool {
+    pub fn config_equals(&self, cron: &str, timezone: &str, task_type: &str, payload: Option<&str>, args: Option<&[String]>, env: Option<&HashMap<String, String>>, sha256: Option<&str>) -> bool {
         self.cron_expr == cron &&
         self.timezone.to_string() == timezone &&
         self.task_type == task_type &&
         self.payload.as_deref() == payload &&
         self.args.as_deref() == args &&
+        self.env.as_ref() == env &&
         self.sha256.as_deref() == sha256
     }
 }

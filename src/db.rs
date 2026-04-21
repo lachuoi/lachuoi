@@ -3,6 +3,7 @@ use libsql::{Builder, Connection};
 use uuid::Uuid;
 use tower_sessions::{session::{Id, Record}, SessionStore};
 use async_trait::async_trait;
+use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct Db {
@@ -81,13 +82,15 @@ impl Db {
         task_type: &str,
         payload: Option<&str>,
         args: Option<Vec<String>>,
+        env: Option<HashMap<String, String>>,
         sha256: Option<&str>,
         enabled: bool,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let args_json = args.map(|a| serde_json::to_string(&a).unwrap());
+        let env_json = env.map(|e| serde_json::to_string(&e).unwrap());
 
         self.conn.execute(
-            "INSERT OR REPLACE INTO cron_tasks (id, name, cron_expr, timezone, task_type, payload, args, sha256, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO cron_tasks (id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             libsql::params![
                 id.to_string(),
                 name.to_string(),
@@ -96,6 +99,7 @@ impl Db {
                 task_type.to_string(),
                 payload.map(|s| s.to_string()),
                 args_json,
+                env_json,
                 sha256.map(|s| s.to_string()),
                 if enabled { 1 } else { 0 }
             ]
@@ -108,12 +112,12 @@ impl Db {
     pub async fn get_tasks(
         &self,
     ) -> Result<
-        Vec<(Uuid, String, String, String, String, Option<String>, Option<Vec<String>>, Option<String>, bool)>,
+        Vec<(Uuid, String, String, String, String, Option<String>, Option<Vec<String>>, Option<HashMap<String, String>>, Option<String>, bool)>,
         Box<dyn std::error::Error + Send + Sync>,
     > {
         let mut rows = self
             .conn
-            .query("SELECT id, name, cron_expr, timezone, task_type, payload, args, sha256, enabled FROM cron_tasks", ())
+            .query("SELECT id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled FROM cron_tasks", ())
             .await?;
 
         let mut tasks = Vec::new();
@@ -125,13 +129,15 @@ impl Db {
             let task_type: String = row.get(4)?;
             let payload: Option<String> = row.get(5)?;
             let args_json: Option<String> = row.get(6)?;
-            let sha256: Option<String> = row.get(7)?;
-            let enabled_int: i64 = row.get(8)?;
+            let env_json: Option<String> = row.get(7)?;
+            let sha256: Option<String> = row.get(8)?;
+            let enabled_int: i64 = row.get(9)?;
 
             let args = args_json.and_then(|j| serde_json::from_str(&j).ok());
+            let env = env_json.and_then(|j| serde_json::from_str(&j).ok());
 
             if let Ok(id) = Uuid::parse_str(&id_str) {
-                tasks.push((id, name, cron_expr, timezone, task_type, payload, args, sha256, enabled_int != 0));
+                tasks.push((id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled_int != 0));
             }
         }
 

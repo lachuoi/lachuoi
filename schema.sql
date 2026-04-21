@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS cron_tasks (
     task_type TEXT NOT NULL DEFAULT 'native',
     payload TEXT,
     args TEXT,
+    env TEXT,
     sha256 TEXT,
     enabled BOOLEAN NOT NULL DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -47,3 +48,8 @@ CREATE TABLE IF NOT EXISTS cron_sessions (
 
 -- Initial Authorized User
 INSERT OR IGNORE INTO cron_users (github_login) VALUES ('seungjin');
+
+-- Migrations
+-- Add env column to cron_tasks if it doesn't exist (SQLite doesn't support IF NOT EXISTS for columns in ALTER TABLE directly)
+-- User should run this manually if upgrading from an older version
+-- ALTER TABLE cron_tasks ADD COLUMN env TEXT;

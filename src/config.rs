@@ -1,4 +1,5 @@
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
@@ -18,6 +19,7 @@ pub struct TaskConfig {
     pub task_type: String,
     pub payload: Option<String>,
     pub args: Option<Vec<String>>,
+    pub env: Option<HashMap<String, String>>,
     pub sha256: Option<String>,
 }
 

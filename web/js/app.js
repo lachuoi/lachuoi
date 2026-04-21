@@ -3,6 +3,50 @@ const statusIndicator = document.getElementById('status-indicator');
 const tableBody = document.getElementById('task-table-body');
 const eventSource = new EventSource('/events');
 
+// --- Layout Logic ---
+const layoutToggleBtn = document.getElementById('layout-toggle');
+const layoutHorizontalIcon = document.getElementById('layout-horizontal-icon');
+const layoutVerticalIcon = document.getElementById('layout-vertical-icon');
+const mainContainer = document.getElementById('main-container');
+const tasksSection = document.getElementById('tasks-section');
+const logsSection = document.getElementById('logs-section');
+const pageContainer = document.getElementById('page-container');
+
+function applyLayout(layout) {
+    const logsDiv = document.getElementById('logs');
+    if (layout === 'split') {
+        mainContainer.classList.remove('flex-col');
+        mainContainer.classList.add('md:flex-row', 'items-start');
+        tasksSection.classList.add('md:w-2/3');
+        logsSection.classList.add('md:w-1/3');
+        pageContainer.classList.remove('max-w-6xl');
+        pageContainer.classList.add('md:max-w-[98%]');
+        layoutHorizontalIcon.classList.add('hidden');
+        layoutVerticalIcon.classList.remove('hidden');
+        if (logsDiv) logsDiv.style.height = 'calc(100vh - 250px)';
+    } else {
+        mainContainer.classList.add('flex-col');
+        mainContainer.classList.remove('md:flex-row', 'items-start');
+        tasksSection.classList.remove('md:w-2/3');
+        logsSection.classList.remove('md:w-1/3');
+        pageContainer.classList.add('max-w-6xl');
+        pageContainer.classList.remove('md:max-w-[98%]');
+        layoutHorizontalIcon.classList.remove('hidden');
+        layoutVerticalIcon.classList.add('hidden');
+        if (logsDiv) logsDiv.style.height = '400px';
+    }
+}
+
+// Initialize layout
+const currentLayout = localStorage.getItem('dashboard-layout') || 'stack';
+applyLayout(currentLayout);
+
+layoutToggleBtn?.addEventListener('click', () => {
+    const newLayout = localStorage.getItem('dashboard-layout') === 'split' ? 'stack' : 'split';
+    localStorage.setItem('dashboard-layout', newLayout);
+    applyLayout(newLayout);
+});
+
 // --- Theme Logic ---
 const themeToggleBtn = document.getElementById('theme-toggle');
 const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
