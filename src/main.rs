@@ -1,7 +1,7 @@
 use std::sync::Arc;
-use task_scheduler::db::Db;
-use task_scheduler::scheduler::Scheduler;
-use task_scheduler::web::WebServer;
+use lachuoi::db::Db;
+use lachuoi::scheduler::Scheduler;
+use lachuoi::web::WebServer;
 
 #[tokio::main]
 async fn main() {
@@ -61,7 +61,7 @@ async fn main() {
     let scheduler = Arc::new(Scheduler::new(db.clone()));
 
     // 3. Register native handlers
-    task_scheduler::native_handlers::register_all(&scheduler).await;
+    lachuoi::native_handlers::register_all(&scheduler).await;
 
     // 4. Load state and sync with configuration
     let _ = scheduler

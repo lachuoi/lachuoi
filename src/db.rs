@@ -41,7 +41,7 @@ impl Db {
         let mut rows = self
             .conn
             .query(
-                "SELECT COUNT(*) FROM cron_users WHERE github_login = ?",
+                "SELECT COUNT(*) FROM lachuoi_users WHERE github_login = ?",
                 libsql::params![github_login],
             )
             .await?;
@@ -61,7 +61,7 @@ impl Db {
         output: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "INSERT INTO cron_outputs (log_id, module, output) VALUES (?, ?, ?)",
+            "INSERT INTO lachuoi_outputs (log_id, module, output) VALUES (?, ?, ?)",
             libsql::params![
                 log_id.to_string(),
                 module.to_string(),
@@ -90,7 +90,7 @@ impl Db {
         let env_json = env.map(|e| serde_json::to_string(&e).unwrap());
 
         self.conn.execute(
-            "INSERT OR REPLACE INTO cron_tasks (id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT OR REPLACE INTO lachuoi_tasks (id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             libsql::params![
                 id.to_string(),
                 name.to_string(),
@@ -117,7 +117,7 @@ impl Db {
     > {
         let mut rows = self
             .conn
-            .query("SELECT id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled FROM cron_tasks", ())
+            .query("SELECT id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled FROM lachuoi_tasks", ())
             .await?;
 
         let mut tasks = Vec::new();
@@ -149,7 +149,7 @@ impl Db {
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self
             .conn
-            .query("SELECT COUNT(*) FROM cron_tasks", ())
+            .query("SELECT COUNT(*) FROM lachuoi_tasks", ())
             .await?;
         if let Some(row) = rows.next().await? {
             let count: i64 = row.get(0)?;
@@ -166,7 +166,7 @@ impl Db {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn
             .execute(
-                "UPDATE cron_tasks SET enabled = ? WHERE id = ?",
+                "UPDATE lachuoi_tasks SET enabled = ? WHERE id = ?",
                 libsql::params![if enabled { 1 } else { 0 }, id.to_string()],
             )
             .await?;
@@ -179,7 +179,7 @@ impl Db {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn
             .execute(
-                "DELETE FROM cron_tasks WHERE id = ?",
+                "DELETE FROM lachuoi_tasks WHERE id = ?",
                 libsql::params![id.to_string()],
             )
             .await?;
@@ -192,7 +192,7 @@ impl Db {
     ) -> Result<Uuid, Box<dyn std::error::Error + Send + Sync>> {
         let log_id = Uuid::new_v4();
         self.conn.execute(
-            "INSERT INTO cron_logs (id, task_id, run_at, duration_ms) VALUES (?, ?, ?, NULL)",
+            "INSERT INTO lachuoi_logs (id, task_id, run_at, duration_ms) VALUES (?, ?, ?, NULL)",
             libsql::params![
                 log_id.to_string(),
                 task_id.to_string(),
@@ -210,7 +210,7 @@ impl Db {
         duration_ms: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "UPDATE cron_logs SET duration_ms = ? WHERE id = ?",
+            "UPDATE lachuoi_logs SET duration_ms = ? WHERE id = ?",
             libsql::params![
                 duration_ms as i64,
                 log_id.to_string()
@@ -229,7 +229,7 @@ impl Db {
         &self,
     ) -> Result<std::collections::HashMap<Uuid, (String, Option<i64>)>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT task_id, run_at, duration_ms FROM cron_logs WHERE (task_id, run_at) IN (SELECT task_id, MAX(run_at) FROM cron_logs WHERE duration_ms IS NOT NULL GROUP BY task_id)",
+            "SELECT task_id, run_at, duration_ms FROM lachuoi_logs WHERE (task_id, run_at) IN (SELECT task_id, MAX(run_at) FROM lachuoi_logs WHERE duration_ms IS NOT NULL GROUP BY task_id)",
             ()
         ).await?;
 
@@ -254,7 +254,7 @@ impl Db {
         body: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "INSERT INTO cron_webhooks (path, method, headers, body) VALUES (?, ?, ?, ?)",
+            "INSERT INTO lachuoi_webhooks (path, method, headers, body) VALUES (?, ?, ?, ?)",
             libsql::params![
                 path.to_string(),
                 method.to_string(),
@@ -277,7 +277,7 @@ impl SessionStore for Db {
         let expiry = record.expiry_date.unix_timestamp();
 
         self.conn.execute(
-            "INSERT OR REPLACE INTO cron_sessions (id, record, expiry_date) VALUES (?, ?, ?)",
+            "INSERT OR REPLACE INTO lachuoi_sessions (id, record, expiry_date) VALUES (?, ?, ?)",
             libsql::params![record.id.to_string(), record_data, expiry]
         ).await.map_err(|e| tower_sessions::session_store::Error::Backend(e.to_string()))?;
 
@@ -286,7 +286,7 @@ impl SessionStore for Db {
 
     async fn load(&self, id: &Id) -> tower_sessions::session_store::Result<Option<Record>> {
         let mut rows = self.conn.query(
-            "SELECT record FROM cron_sessions WHERE id = ? AND expiry_date > ?",
+            "SELECT record FROM lachuoi_sessions WHERE id = ? AND expiry_date > ?",
             libsql::params![id.to_string(), Utc::now().timestamp()]
         ).await.map_err(|e| tower_sessions::session_store::Error::Backend(e.to_string()))?;
 
@@ -302,7 +302,7 @@ impl SessionStore for Db {
 
     async fn delete(&self, id: &Id) -> tower_sessions::session_store::Result<()> {
         self.conn.execute(
-            "DELETE FROM cron_sessions WHERE id = ?",
+            "DELETE FROM lachuoi_sessions WHERE id = ?",
             libsql::params![id.to_string()]
         ).await.map_err(|e| tower_sessions::session_store::Error::Backend(e.to_string()))?;
 

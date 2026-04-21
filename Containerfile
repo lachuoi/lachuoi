@@ -36,7 +36,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy the binary from builder
-COPY --from=builder /app/target/release/task-scheduler /app/task-scheduler
+COPY --from=builder /app/target/release/lachuoi /app/lachuoi
 
 # Copy required runtime directories and files
 COPY --from=builder /app/web /app/web
@@ -48,7 +48,7 @@ RUN mkdir /app/data
 ENV TURSO_DATABASE_URL="/app/data/tasks.db"
 
 # Expose the web server port
-EXPOSE 3000
+EXPOSE 9130
 
 # Run the scheduler
-CMD ["./task-scheduler"]
+CMD ["./lachuoi"]

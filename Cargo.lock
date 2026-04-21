@@ -1846,6 +1846,40 @@ dependencies = [
 ]
 
 [[package]]
+name = "lachuoi"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.7.9",
+ "bytes",
+ "chrono",
+ "chrono-tz",
+ "cron",
+ "dotenvy",
+ "futures-util",
+ "gag",
+ "libsql",
+ "oauth2",
+ "os_pipe",
+ "rand 0.10.1",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "tokio",
+ "tokio-stream",
+ "toml",
+ "tower-http 0.6.8",
+ "tower-sessions",
+ "urlencoding",
+ "uuid",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-http",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3329,40 +3363,6 @@ name = "target-lexicon"
 version = "0.13.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "adb6935a6f5c20170eeceb1a3835a49e12e19d792f6dd344ccc76a985ca5a6ca"
-
-[[package]]
-name = "task-scheduler"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "axum 0.7.9",
- "bytes",
- "chrono",
- "chrono-tz",
- "cron",
- "dotenvy",
- "futures-util",
- "gag",
- "libsql",
- "oauth2",
- "os_pipe",
- "rand 0.10.1",
- "reqwest 0.13.2",
- "serde",
- "serde_json",
- "sha2 0.11.0",
- "tokio",
- "tokio-stream",
- "toml",
- "tower-http 0.6.8",
- "tower-sessions",
- "urlencoding",
- "uuid",
- "wasmtime",
- "wasmtime-wasi",
- "wasmtime-wasi-http",
-]
 
 [[package]]
 name = "tempfile"

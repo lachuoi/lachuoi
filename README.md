@@ -1,4 +1,4 @@
-# Cron Task Scheduler
+# La Chuoi Task Scheduler
 
 <img src="screenshot.png" alt="Dashboard Screenshot" width="800" style="border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 2rem;">
 
@@ -85,7 +85,7 @@ cargo run --release
 ### Zero-Downtime Reload
 If you modify `cron.toml`, you can reload the configuration without restarting the service:
 ```bash
-./task-scheduler reload
+./lachuoi reload
 ```
 *This sends a SIGHUP signal to the main process via its PID file.*
 
@@ -121,8 +121,8 @@ Accessible at `http://localhost:9130` (default port).
 
 The project includes a `Containerfile` for Docker/Podman deployment:
 ```bash
-podman build -t task-scheduler .
-podman run -p 3000:3000 --env-file .env task-scheduler
+podman build -t lachuoi .
+podman run -p 9130:9130 --env-file .env lachuoi
 ```
 
 ---

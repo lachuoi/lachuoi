@@ -89,7 +89,7 @@ pub async fn github_callback(
     // Fetch user info
     let user_info: GitHubUser = match client
         .get("https://api.github.com/user")
-        .header("User-Agent", "task-scheduler")
+        .header("User-Agent", "lachuoi")
         .header("Authorization", format!("Bearer {}", token_data.access_token))
         .send()
         .await {
