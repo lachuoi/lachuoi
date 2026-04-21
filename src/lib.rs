@@ -2,7 +2,9 @@ pub mod async_scheduler;
 pub mod config;
 pub mod db;
 pub mod native_handlers;
+pub mod wasm_handlers;
 pub mod scheduler;
-pub mod task;
 pub mod task_config;
+pub mod task;
 pub mod web;
+

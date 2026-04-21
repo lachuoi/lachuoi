@@ -5,7 +5,6 @@ use std::future::Future;
 use uuid::Uuid;
 use crate::db::Db;
 use crate::scheduler::Scheduler;
-use chrono::Utc;
 
 /// Registers all native handlers to the provided scheduler
 pub async fn register_all(scheduler: &Scheduler) {

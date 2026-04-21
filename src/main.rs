@@ -60,8 +60,9 @@ async fn main() {
     // 2. Initialize Scheduler
     let scheduler = Arc::new(Scheduler::new(db.clone()));
 
-    // 3. Register native handlers
+    // 3. Register native and WASM handlers
     lachuoi::native_handlers::register_all(&scheduler).await;
+    lachuoi::wasm_handlers::register_all(&scheduler).await;
 
     // 4. Load state and sync with configuration
     let _ = scheduler
