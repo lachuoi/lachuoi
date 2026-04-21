@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - La Chuoi Scheduler</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/assets/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/assets/favicon-16x16.png">
+    <link rel="shortcut icon" href="/static/assets/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100 transition-colors duration-300">
+    <div id="page-container" class="max-w-6xl mx-auto px-4 py-8 transition-all duration-300">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+            <div>
+                <h1 class="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">La Chuoi Scheduler</h1>
+                <p class="text-slate-500 dark:text-slate-400 mt-1">Distributed Task Management Dashboard</p>
+            </div>
+            
+            <div class="flex flex-col items-end gap-3 text-sm">
+                <div class="flex items-center gap-3">
+                    <!-- Layout Toggle -->
+                    <button id="layout-toggle" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-600 dark:text-slate-400" title="Toggle Layout">
+                        <svg id="layout-horizontal-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                        <svg id="layout-vertical-icon" class="hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h2m3 0h2a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                    </button>
+
+                    <!-- Theme Toggle -->
+                    <button id="theme-toggle" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
+                        <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5 text-slate-100" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                        <svg id="theme-toggle-light-icon" class="hidden w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                    </button>
+                    
+                    <div class="text-slate-500 dark:text-slate-400">
+                        Logged in as <span class="font-bold text-slate-800 dark:text-slate-200">{{user}}</span>
+                        <span class="mx-2 text-slate-300 dark:text-slate-700">|</span>
+                        <a href="/logout" class="text-blue-600 dark:text-blue-400 hover:underline font-semibold transition-colors">Logout</a>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main id="main-container" class="flex flex-col gap-8 transition-all duration-300">
+            <!-- Tasks Table -->
+            <div id="tasks-section" class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('name')">
+                                    <div class="flex items-center gap-1">
+                                        Name <span id="sort-name" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('task_type')">
+                                    <div class="flex items-center gap-1">
+                                        Type <span id="sort-task_type" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('cron')">
+                                    <div class="flex items-center gap-1">
+                                        Schedule <span id="sort-cron" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('timezone')">
+                                    <div class="flex items-center gap-1">
+                                        Timezone <span id="sort-timezone" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('last_run')">
+                                    <div class="flex items-center gap-1">
+                                        Last Run <span id="sort-last_run" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('enabled')">
+                                    <div class="flex items-center gap-1">
+                                        Status <span id="sort-enabled" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
+                                    </div>
+                                </th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="task-table-body" class="divide-y divide-slate-100 dark:divide-slate-800">
+                            {{rows}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Logs Section -->
+            <div id="logs-section" class="bg-slate-900 dark:bg-black rounded-xl shadow-2xl border border-slate-800 dark:border-slate-900 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-400 font-bold text-xs uppercase tracking-widest">Live Execution Logs</span>
+                        <span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-bold uppercase">Realtime</span>
+                    </div>
+                    <span id="status-indicator" class="text-xs font-medium transition-colors duration-300">Connecting...</span>
+                </div>
+                <div id="logs" class="p-6 h-[400px] overflow-y-auto font-mono text-sm leading-relaxed scrollbar-thin scrollbar-thumb-slate-700 text-slate-300">
+                    <!-- Logs will appear here -->
+                </div>
+            </div>
+        </main>
+        
+        <footer class="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800 text-center text-slate-400 dark:text-slate-500 text-sm">
+            &copy; 2026 Seungjin Kim. Licensed under MIT or Apache 2.0.
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js?v=12"></script>
+</body>
+</html>

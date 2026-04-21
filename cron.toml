@@ -1,0 +1,108 @@
+[[task]]
+name = "heartbeat"
+cron = "40 * * * * *"
+timezone = "UTC"
+type = "native"
+
+[[task]]
+name = "cache-cleanup"
+cron = "0 */5 * * * *"
+timezone = "Asia/Seoul"
+type = "native"
+
+[[task]]
+name = "wasm-hello"
+cron = "0 */2 * * * *"
+timezone = "UTC"
+type = "wasm"
+payload = "hello.wasm"
+sha256 = "2e45e356ee4a7587927d61a898e493af8507a26dc6c05413898100e90dc39239"
+
+[[task]]
+name = "weather-station"
+cron = "1 */10 * * * *"
+timezone = "Asia/Seoul"
+type = "wasm"
+payload = "weather_station.wasm"
+[task.env]
+API_KEY = "secret-key-123"
+STATION_ID = "SEOUL-001"
+
+[[task]]
+name = "ssh foo"
+cron = "0 0 * * * *"
+timezone = "Asia/Seoul"
+type = "wasm"
+payload = "ssh.wasm"
+sha256 = "ad677d5c7c136f862aed95f61879d0b0bb80cfb6f99212b7a7aada581b50f70c"
+args = [
+  "1.ctb.seungjin.net",
+  "432",
+  "seungjin",
+  "file:~/.ssh/id_ed25519",
+  "hostname",
+  "key",
+]
+
+[[task]]
+name = "ssh bar"
+cron = "0 0 * * * *"
+timezone = "Asia/Seoul"
+type = "wasm"
+payload = "ssh.wasm"
+sha256 = "ad677d5c7c136f862aed95f61879d0b0bb80cfb6f99212b7a7aada581b50f70c"
+args = [
+  "0.zap.seungjin.net",
+  "432",
+  "seungjin",
+  "file:~/.ssh/id_ed25519",
+  "hostname",
+  "key",
+]
+
+[[task]]
+name = "LeLoi base image build"
+cron = "0 0 4 * * *"
+timezone = "Asia/Seoul"
+type = "wasm"
+payload = "ssh.wasm"
+sha256 = "ad677d5c7c136f862aed95f61879d0b0bb80cfb6f99212b7a7aada581b50f70c"
+args = [
+  "0.zap.seungjin.net",
+  "432",
+  "seungjin",
+  "file:~/.ssh/id_ed25519",
+  "podman --version",
+  "key",
+]
+
+[[task]]
+name = "LeLoi image build"
+cron = "0 0 5 * * *"
+timezone = "Asia/Seoul"
+type = "wasm"
+payload = "ssh.wasm"
+sha256 = "ad677d5c7c136f862aed95f61879d0b0bb80cfb6f99212b7a7aada581b50f70c"
+args = [
+  "0.zap.seungjin.net",
+  "432",
+  "seungjin",
+  "file:~/.ssh/id_ed25519",
+  "podman --version",
+  "key",
+]
+
+# [[task]]
+# name = "News Penguin RSS"
+# cron = "0 */20 * * * *"
+# timezone = "Asia/Seoul"
+# type = "wasm"
+# payload = "newspenguin-rss-bot.wasm"
+# sha256 = "78c468610d5f5204a0afb9e0ab11a43747014abe32fea5c5dcdc89a436d0916f"
+# [task.env]
+# NEWSPENGUIN_RSS_URI = "https://www.newspenguin.com/rss/allArticle.xml"
+# NEWSPENGUIN_MSTD_API_URI = "https://mstd.seungjin.net"
+# NEWSPENGUIN_MSTD_ACCESS_TOKEN = "jNMSF_8etaPN3eEPvvUwkvpv11xrt6416p807il2ON4"
+# LIBSQL_URL = "https://lachuoi-seungjin.turso.io"
+# LIBSQL_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NDQxNjMzNTUsImlkIjoiZDU0MjE4ZWUtMTJlMi00MmZkLThhYjEtYjEyYTlkODA4OWM0In0.6Ha6Hz1R6ebJP8WWBwwzXkXXyOx68pMlQDQ8Z2mGurM8Q6CjtM9Tgr5Ozfoe9M0ajYQjXYBLE3-DXVh4tjBLBg"
+# LIBSQL_KV_TABLE = "kv_store"

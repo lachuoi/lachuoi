@@ -1,0 +1,8 @@
+/target
+.env
+/plugins
+debug.log
+final.log
+output.log
+out
+err
