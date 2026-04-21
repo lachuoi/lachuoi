@@ -245,6 +245,27 @@ impl Db {
         }
         Ok(results)
     }
+
+    pub async fn save_webhook(
+        &self,
+        path: &str,
+        method: &str,
+        headers: &str,
+        body: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.conn.execute(
+            "INSERT INTO cron_webhooks (path, method, headers, body) VALUES (?, ?, ?, ?)",
+            libsql::params![
+                path.to_string(),
+                method.to_string(),
+                headers.to_string(),
+                body.to_string()
+            ]
+        )
+        .await?;
+
+        Ok(())
+    }
 }
 
 #[async_trait]

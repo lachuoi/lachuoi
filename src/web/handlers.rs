@@ -1,4 +1,4 @@
-use axum::{Json, extract::{State, Query, Path}, response::{Html, Redirect, IntoResponse}, response::sse::{Event, Sse}, http::StatusCode};
+use axum::{Json, extract::{State, Query, Path}, response::{Html, Redirect, IntoResponse}, response::sse::{Event, Sse}, http::{StatusCode, Method, HeaderMap}};
 use std::sync::Arc;
 use uuid::Uuid;
 use crate::scheduler::Scheduler;
@@ -9,6 +9,34 @@ use std::convert::Infallible;
 use tower_sessions::Session;
 use serde::Deserialize;
 use crate::web::login::USER_SESSION_KEY;
+
+pub async fn webhook_handler(
+    State(scheduler): State<Arc<Scheduler>>,
+    method: Method,
+    uri: axum::http::Uri,
+    headers: HeaderMap,
+    body: String,
+) -> impl IntoResponse {
+    let db = scheduler.get_db();
+    let path = uri.path().to_string();
+    let method_str = method.to_string();
+    
+    let mut headers_map = std::collections::HashMap::new();
+    for (name, value) in headers.iter() {
+        if let Ok(value_str) = value.to_str() {
+            headers_map.insert(name.to_string(), value_str.to_string());
+        }
+    }
+    let headers_json = serde_json::to_string(&headers_map).unwrap_or_default();
+
+    match db.save_webhook(&path, &method_str, &headers_json, &body).await {
+        Ok(_) => (StatusCode::OK, "OK"),
+        Err(e) => {
+            eprintln!("Failed to save webhook: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
+        }
+    }
+}
 
 pub async fn events_handler(
     State(scheduler): State<Arc<Scheduler>>,

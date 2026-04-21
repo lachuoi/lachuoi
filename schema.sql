@@ -46,6 +46,16 @@ CREATE TABLE IF NOT EXISTS cron_sessions (
     expiry_date INTEGER NOT NULL
 );
 
+-- Webhook Logs Table
+CREATE TABLE IF NOT EXISTS cron_webhooks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    path TEXT NOT NULL,
+    method TEXT NOT NULL,
+    headers TEXT,
+    body TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Initial Authorized User
 INSERT OR IGNORE INTO cron_users (github_login) VALUES ('seungjin');
 

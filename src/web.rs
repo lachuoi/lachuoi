@@ -35,6 +35,8 @@ impl WebServer {
             .route("/logout", get(login::logout))
             .route("/task-status", get(handlers::status_page_handler))
             .route("/admin/reload", get(handlers::reload_config_handler))
+            .route("/webhook", axum::routing::any(handlers::webhook_handler))
+            .route("/webhook/*path", axum::routing::any(handlers::webhook_handler))
             .route("/tasks", get(handlers::get_tasks_handler))
             .route("/tasks/:id/toggle", axum::routing::post(handlers::toggle_task_handler))
             .route("/events", get(handlers::events_handler))
