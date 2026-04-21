@@ -20,29 +20,79 @@
         .font-mono { font-family: 'JetBrains Mono', monospace; }
         .modal { display: none; }
         .modal.active { display: flex; }
-        .sidebar { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-        .sidebar-collapsed { width: 4rem; }
+        .sidebar { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; }
+        .sidebar.resizing { transition: none; }
+        .sidebar-collapsed { width: 4rem !important; }
         .sidebar-expanded { width: 16rem; }
-        .nav-text { transition: opacity 0.2s; }
+        .sidebar-resizer {
+            position: absolute;
+            top: 0;
+            right: -2px;
+            width: 4px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 60;
+            transition: background 0.2s;
+        }
+        .sidebar-resizer:hover, .sidebar.resizing .sidebar-resizer {
+            background: rgba(59, 130, 246, 0.5);
+        }
+        .nav-text { transition: opacity 0.2s; overflow: hidden; }
         .sidebar-collapsed .nav-text { opacity: 0; pointer-events: none; width: 0; }
-        .sidebar-collapsed .nav-item { justify-content: center; }
+        .sidebar-collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; gap: 0; }
         .sidebar-collapsed .logo-text { display: none; }
+        .sidebar-collapsed .sidebar-header { justify-content: center; }
+        .sidebar-collapsed .sidebar-header-logo { margin-right: 0; }
+        .sidebar-collapsed .sidebar-header-toggle { 
+            position: absolute; 
+            right: -9px; 
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 50;
+            background: white;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            padding: 22px 1px;
+            border-radius: 6px;
+        }
+        .sidebar-expanded .sidebar-header-toggle {
+            position: absolute;
+            right: -9px; 
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 50;
+            background: white;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            padding: 22px 1px;
+            border-radius: 6px;
+        }
+        .sidebar-header-toggle svg {
+            width: 14px;
+            height: 14px;
+        }
+        .dark .sidebar-header-toggle {
+            background: #1e293b;
+            border-color: #334155;
+        }
+        .sidebar-collapsed .user-profile-container { gap: 0; justify-content: center; }
     </style>
 </head>
 <body class="bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100 transition-colors duration-300 flex">
     <!-- Sidebar -->
     <aside id="sidebar" class="sidebar sidebar-expanded sticky top-0 h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-40">
-        <div class="p-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 h-20">
-            <div class="flex items-center gap-3 overflow-hidden">
+        <div id="sidebar-resizer" class="sidebar-resizer"></div>
+        <div class="sidebar-header p-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 h-20">
+            <div class="sidebar-header-logo flex items-center gap-3 overflow-hidden">
                 <img src="/static/assets/favicon-32x32.png" class="w-8 h-8 rounded-lg" alt="LC">
                 <span class="logo-text font-extrabold text-lg tracking-tight whitespace-nowrap">La Chuoi</span>
             </div>
-            <button id="sidebar-toggle" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+            <button id="sidebar-toggle" class="sidebar-header-toggle p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                 <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
             </button>
         </div>
 
-        <nav class="flex-1 p-3 space-y-2 overflow-y-auto">
+        <nav class="flex-1 p-3 space-y-2 overflow-y-auto overflow-x-hidden">
             <a href="/task-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-all group" title="Tasks Dashboard">
                 <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h2m3 0h2a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
                 <span class="nav-text whitespace-nowrap">Tasks Status</span>
@@ -54,7 +104,7 @@
         </nav>
 
         <div class="p-4 border-t border-slate-100 dark:border-slate-800">
-            <div class="flex items-center gap-3 overflow-hidden">
+            <div class="user-profile-container flex items-center gap-3 overflow-hidden">
                 {{user_avatar}}
                 <div class="nav-text overflow-hidden">
                     <p class="text-sm font-bold truncate">{{user}}</p>
@@ -67,31 +117,34 @@
     <!-- Main Content -->
     <div id="page-container" class="flex-1 min-w-0 flex flex-col transition-all duration-300">
         <!-- Header -->
-        <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-8 h-20 flex items-center justify-between">
-            <div>
-                <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Webhook Logs</h1>
-            </div>
-            
-            <div class="flex items-center gap-3">
-                <!-- Theme Toggle -->
-                <button id="theme-toggle" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
-                    <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5 text-slate-100" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
-                    <svg id="theme-toggle-light-icon" class="hidden w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
-                </button>
+        <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 h-20 flex items-center justify-center">
+            <div id="header-container" class="w-full px-8 flex items-center justify-between transition-all duration-300">
+                <div>
+                    <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Webhook Logs</h1>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <!-- Theme Toggle -->                    <button id="theme-toggle" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
+                        <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5 text-slate-600" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                        <svg id="theme-toggle-light-icon" class="hidden w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                    </button>
+                </div>
             </div>
         </header>
 
         <!-- Main Scrollable Area -->
         <main class="flex-1 overflow-y-auto p-8">
-            <div class="max-w-6xl mx-auto bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left border-collapse">
+            <div id="main-container" class="max-w-none mx-auto flex flex-col gap-8 transition-all duration-300">
+                <div id="webhook-logs-container" class="max-w-[80%] w-full mx-auto bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
                                 <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ID</th>
                                 <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Time</th>
                                 <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Method</th>
                                 <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Path</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Remote Address</th>
                                 <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Details</th>
                             </tr>
                         </thead>
@@ -131,29 +184,75 @@
     </div>
 
     <script>
-        // Sidebar Toggle
+        // Sidebar Toggle & Resizing
         const sidebar = document.getElementById('sidebar');
         const sidebarToggle = document.getElementById('sidebar-toggle');
-        
+        const sidebarLogo = document.querySelector('.sidebar-header-logo');
+        const resizer = document.getElementById('sidebar-resizer');
+
         // Load sidebar state
+        const savedWidth = localStorage.getItem('sidebar-width');
+        if (savedWidth && localStorage.getItem('sidebar-collapsed') !== 'true') {
+            sidebar.style.width = savedWidth;
+        }
+
         if (localStorage.getItem('sidebar-collapsed') === 'true') {
             sidebar.classList.remove('sidebar-expanded');
             sidebar.classList.add('sidebar-collapsed');
             sidebarToggle.querySelector('svg').style.transform = 'rotate(180deg)';
         }
 
-        sidebarToggle.addEventListener('click', () => {
+        const toggleSidebar = () => {
             const isCollapsed = sidebar.classList.contains('sidebar-collapsed');
             if (isCollapsed) {
                 sidebar.classList.remove('sidebar-collapsed');
                 sidebar.classList.add('sidebar-expanded');
                 sidebarToggle.querySelector('svg').style.transform = 'rotate(0deg)';
                 localStorage.setItem('sidebar-collapsed', 'false');
+                const savedWidth = localStorage.getItem('sidebar-width');
+                if (savedWidth) sidebar.style.width = savedWidth;
             } else {
                 sidebar.classList.remove('sidebar-expanded');
                 sidebar.classList.add('sidebar-collapsed');
                 sidebarToggle.querySelector('svg').style.transform = 'rotate(180deg)';
                 localStorage.setItem('sidebar-collapsed', 'true');
+                sidebar.style.width = ''; // Reset to CSS default for collapsed
+            }
+        };
+
+        sidebarToggle.addEventListener('click', toggleSidebar);
+        sidebarLogo.addEventListener('click', () => {
+            if (sidebar.classList.contains('sidebar-collapsed')) {
+                toggleSidebar();
+            }
+        });
+
+        // Resizing Logic
+        let isResizing = false;
+
+        resizer.addEventListener('mousedown', (e) => {
+            if (sidebar.classList.contains('sidebar-collapsed')) return;
+            isResizing = true;
+            sidebar.classList.add('resizing');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            let newWidth = e.clientX;
+            if (newWidth < 160) newWidth = 160; // Min width when expanded
+            if (newWidth > 600) newWidth = 600; // Max width
+            sidebar.style.width = `${newWidth}px`;
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                sidebar.classList.remove('resizing');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+                localStorage.setItem('sidebar-width', sidebar.style.width);
             }
         });
 

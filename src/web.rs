@@ -40,6 +40,7 @@ impl WebServer {
             .route("/webhook/*path", axum::routing::any(handlers::webhook_handler))
             .route("/tasks", get(handlers::get_tasks_handler))
             .route("/tasks/:id/toggle", axum::routing::post(handlers::toggle_task_handler))
+            .route("/logs/initial", get(handlers::get_initial_logs_handler))
             .route("/events", get(handlers::events_handler))
             .nest_service("/static", ServeDir::new("web"))
             .layer(session_layer)

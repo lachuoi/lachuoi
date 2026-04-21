@@ -3,36 +3,89 @@ const statusIndicator = document.getElementById('status-indicator');
 const tableBody = document.getElementById('task-table-body');
 const eventSource = new EventSource('/events');
 
+// --- Initial Logs ---
+async function fetchInitialLogs() {
+    if (!logsDiv) return;
+    try {
+        const response = await fetch('/logs/initial');
+        if (response.ok) {
+            const data = await response.json();
+            data.logs.forEach(log => {
+                const entry = document.createElement('div');
+                entry.className = 'mb-1 flex gap-3 text-xs md:text-sm';
+                const isError = log.output.toLowerCase().includes('failed') || log.output.toLowerCase().includes('error');
+                const textColor = isError ? 'text-red-400 font-medium' : 'text-slate-300';
+                
+                let timeStr;
+                try {
+                    const date = new Date(log.created_at);
+                    timeStr = isNaN(date.getTime()) ? 'Recent' : date.toLocaleTimeString();
+                } catch(e) {
+                    timeStr = 'Recent';
+                }
+
+                entry.innerHTML = `<span class="text-slate-500 shrink-0 font-medium select-none">[${timeStr}]</span><span class="${textColor}">${log.output}</span>`;
+                logsDiv.appendChild(entry);
+            });
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+    } catch (error) {
+        console.error('Error fetching initial logs:', error);
+    }
+}
+
+fetchInitialLogs();
+
 // --- Layout Logic ---
 const layoutToggleBtn = document.getElementById('layout-toggle');
 const layoutHorizontalIcon = document.getElementById('layout-horizontal-icon');
 const layoutVerticalIcon = document.getElementById('layout-vertical-icon');
 const mainContainer = document.getElementById('main-container');
-const tasksSection = document.getElementById('tasks-section');
+const tasksSection = document.getElementById('tasks-section') || document.getElementById('webhook-logs-container');
 const logsSection = document.getElementById('logs-section');
 const pageContainer = document.getElementById('page-container');
+const headerContainer = document.getElementById('header-container');
 
 function applyLayout(layout) {
     const logsDiv = document.getElementById('logs');
+    if (!mainContainer) return;
+
     if (layout === 'split') {
-        mainContainer.classList.remove('flex-col');
-        mainContainer.classList.add('md:flex-row', 'items-start');
-        tasksSection.classList.add('md:w-2/3');
-        logsSection.classList.add('md:w-1/3');
-        pageContainer.classList.remove('max-w-6xl');
-        pageContainer.classList.add('md:max-w-[98%]');
-        layoutHorizontalIcon.classList.add('hidden');
-        layoutVerticalIcon.classList.remove('hidden');
+        mainContainer.classList.remove('flex-col', 'items-center');
+        mainContainer.classList.add('md:flex-row', 'items-start', 'w-full');
+        if (headerContainer) headerContainer.classList.remove('max-w-[80%]', 'mx-auto');
+        if (tasksSection) {
+            tasksSection.classList.remove('max-w-[80%]', 'w-full');
+            tasksSection.classList.add('md:flex-[6]', 'min-w-0');
+        }
+        if (logsSection) {
+            logsSection.classList.remove('max-w-[80%]', 'w-full');
+            logsSection.classList.add('md:flex-[4]', 'min-w-0');
+        }
+        if (pageContainer) {
+            pageContainer.classList.remove('max-w-6xl', 'md:max-w-[98%]');
+            pageContainer.classList.add('md:max-w-[98%]');
+        }
+        if (layoutHorizontalIcon) layoutHorizontalIcon.classList.add('hidden');
+        if (layoutVerticalIcon) layoutVerticalIcon.classList.remove('hidden');
         if (logsDiv) logsDiv.style.height = 'calc(100vh - 250px)';
     } else {
-        mainContainer.classList.add('flex-col');
-        mainContainer.classList.remove('md:flex-row', 'items-start');
-        tasksSection.classList.remove('md:w-2/3');
-        logsSection.classList.remove('md:w-1/3');
-        pageContainer.classList.add('max-w-6xl');
-        pageContainer.classList.remove('md:max-w-[98%]');
-        layoutHorizontalIcon.classList.remove('hidden');
-        layoutVerticalIcon.classList.add('hidden');
+        mainContainer.classList.add('flex-col', 'items-center');
+        mainContainer.classList.remove('md:flex-row', 'items-start', 'w-full');
+        if (headerContainer) headerContainer.classList.add('max-w-[80%]', 'mx-auto');
+        if (tasksSection) {
+            tasksSection.classList.remove('md:flex-[6]', 'md:w-2/3', 'min-w-0');
+            tasksSection.classList.add('max-w-[80%]', 'w-full');
+        }
+        if (logsSection) {
+            logsSection.classList.remove('md:flex-[4]', 'md:w-1/3', 'min-w-0');
+            logsSection.classList.add('max-w-[80%]', 'w-full');
+        }
+        if (pageContainer) {
+            pageContainer.classList.remove('max-w-6xl', 'md:max-w-[98%]');
+        }
+        if (layoutHorizontalIcon) layoutHorizontalIcon.classList.remove('hidden');
+        if (layoutVerticalIcon) layoutVerticalIcon.classList.add('hidden');
         if (logsDiv) logsDiv.style.height = '400px';
     }
 }

@@ -86,6 +86,41 @@ pub async fn get_tasks_handler(
     Ok(Json(scheduler.get_tasks_status().await))
 }
 
+#[derive(serde::Serialize)]
+pub struct InitialLogs {
+    pub logs: Vec<LogEntry>,
+}
+
+#[derive(serde::Serialize)]
+pub struct LogEntry {
+    pub output: String,
+    pub created_at: String,
+}
+
+pub async fn get_initial_logs_handler(
+    State(scheduler): State<Arc<Scheduler>>,
+    session: Session,
+) -> Result<Json<InitialLogs>, impl IntoResponse> {
+    if session.get::<i64>(USER_SESSION_KEY).await.unwrap().is_none() {
+        return Err((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
+    }
+    
+    let db = scheduler.get_db();
+    match db.get_initial_logs(100).await {
+        Ok(logs) => {
+            let entries = logs.into_iter().map(|(output, created_at)| LogEntry {
+                output,
+                created_at,
+            }).collect();
+            Ok(Json(InitialLogs { logs: entries }))
+        },
+        Err(e) => {
+            eprintln!("Failed to fetch initial logs: {}", e);
+            Err((StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response())
+        }
+    }
+}
+
 #[derive(Deserialize)]
 pub struct ToggleRequest {
     pub enabled: bool,
@@ -216,12 +251,21 @@ pub async fn webhook_status_page_handler(
         let headers_attr = webhook.headers.replace("'", "&apos;");
         let body_attr = webhook.body.replace("'", "&apos;");
 
+        let from_address = match serde_json::from_str::<serde_json::Value>(&webhook.headers) {
+            Ok(v) => v.get("x-forwarded-for")
+                .and_then(|h| h.as_str())
+                .unwrap_or("-")
+                .to_string(),
+            Err(_) => "-".to_string(),
+        };
+
         rows.push_str(&format!(
             "<tr id='row-{id}' class='border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors' data-headers='{headers}' data-body='{body}'>
                 <td class='px-4 py-3 align-middle text-xs font-mono text-gray-500 dark:text-slate-500'>{id}</td>
                 <td class='px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400'>{time}</td>
                 <td class='px-4 py-3 align-middle'><span class='px-2 py-1 text-[10px] uppercase font-bold rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'>{method}</span></td>
                 <td class='px-4 py-3 align-middle text-sm font-mono text-gray-900 dark:text-slate-100'>{path}</td>
+                <td class='px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400'>{from}</td>
                 <td class='px-4 py-3 align-middle'>
                     <button class='px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-600 hover:text-white dark:bg-blue-900/20 dark:border-blue-800 dark:hover:bg-blue-600 transition-colors' onclick='showDetails({id})'>View Details</button>
                 </td>
@@ -230,6 +274,7 @@ pub async fn webhook_status_page_handler(
             time = webhook.created_at,
             method = webhook.method,
             path = webhook.path,
+            from = from_address,
             headers = headers_attr,
             body = body_attr
         ));

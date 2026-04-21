@@ -246,6 +246,25 @@ impl Db {
         Ok(results)
     }
 
+    pub async fn get_initial_logs(
+        &self,
+        limit: usize,
+    ) -> Result<Vec<(String, String)>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut rows = self.conn.query(
+            "SELECT output, created_at FROM lachuoi_outputs ORDER BY created_at DESC LIMIT ?",
+            libsql::params![limit as i64]
+        ).await?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows.next().await? {
+            let output: String = row.get(0)?;
+            let created_at: String = row.get(1)?;
+            results.push((output, created_at));
+        }
+        results.reverse();
+        Ok(results)
+    }
+
     pub async fn save_webhook(
         &self,
         path: &str,
