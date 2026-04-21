@@ -1,4 +1,7 @@
-# La Chuoi Task Scheduler
+# La Chuoi - WASI Runtime Framework
+
+> [!NOTE]
+> The original Spin Framework and GPLv4-based code have been moved to the `legacy-gpl-version` branch. This is a new implementation of La Chuoi built from scratch: a Wasmtime-based WASI runtime framework licensed under MIT/Apache 2.0.
 
 <img src="screenshot.png" alt="Dashboard Screenshot" width="800" style="border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 2rem;">
 
@@ -7,7 +10,7 @@ A high-performance, distributed task management engine built with Rust. This sch
 ## 🚀 Key Features
 
 - **Hybrid Execution**: Run native Rust tasks or secure, sandboxed WASM components.
-- **Remote WASM**: Support for downloading WASM binaries directly from HTTPS URLs with mandatory verification.
+- **Remote WASM**: Download WASM binaries directly from HTTPS URLs with mandatory verification.
 - **WASM Security**: Mandatory SHA256 checksum verification for all WASM binaries (local or remote).
 - **Modern Dashboard**: Responsive UI built with Tailwind CSS, featuring **Dark/Light theme** support.
 - **Real-time Monitoring**: Live execution logs and status updates via Server-Sent Events (SSE).
@@ -103,7 +106,7 @@ Native tasks are modularized in `src/native_handlers.rs`. To add a new native ta
 WASM tasks run in a strictly sandboxed environment using **Wasmtime**.
 - **SHA256 Check**: The scheduler verifies the binary hash before every execution.
 - **Argument Resolution**: Supports dynamic argument injection (e.g., `file:~/.ssh/id_ed25519`).
-- **Standard Out**: Logs are captured via `PrefixPipe` and streamed to the UI in real-time.
+- **Standard Output**: Logs are captured via `PrefixPipe` and streamed to the UI in real-time.
 
 ---
 
@@ -112,8 +115,8 @@ WASM tasks run in a strictly sandboxed environment using **Wasmtime**.
 Accessible at `http://localhost:9130` (default port).
 
 - **Sorting**: Click any column header (Name, Type, Last Run, etc.) to sort. "Last Run" uses chronological date sorting.
-- **Controls**: Use the **Enable/Disable** buttons to pause tasks without removing them from config.
-- **Live Logs**: View the last 1000 lines of execution logs in the realtime console.
+- **Controls**: Use the **Enable/Disable** buttons to pause tasks without removing them from the configuration.
+- **Live Logs**: View the last 1000 lines of execution logs in the real-time console.
 
 ---
 
