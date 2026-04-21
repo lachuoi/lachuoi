@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - La Chuoi Scheduler</title>
+    <title>Webhook Logs - La Chuoi Scheduler</title>
     <link rel="apple-touch-icon" sizes="180x180" href="/static/assets/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/assets/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/assets/favicon-16x16.png">
@@ -18,6 +18,8 @@
     <style>
         body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
         .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .modal { display: none; }
+        .modal.active { display: flex; }
         .sidebar { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
         .sidebar-collapsed { width: 4rem; }
         .sidebar-expanded { width: 16rem; }
@@ -41,11 +43,11 @@
         </div>
 
         <nav class="flex-1 p-3 space-y-2 overflow-y-auto">
-            <a href="/task-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold transition-all group" title="Tasks Dashboard">
+            <a href="/task-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-all group" title="Tasks Dashboard">
                 <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h2m3 0h2a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
                 <span class="nav-text whitespace-nowrap">Tasks Status</span>
             </a>
-            <a href="/webhook-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-all group" title="Webhook Logs">
+            <a href="/webhook-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold transition-all group" title="Webhook Logs">
                 <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                 <span class="nav-text whitespace-nowrap">Webhook Status</span>
             </a>
@@ -69,16 +71,10 @@
         <!-- Header -->
         <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-8 h-20 flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Task Status</h1>
+                <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Webhook Logs</h1>
             </div>
             
             <div class="flex items-center gap-3">
-                <!-- Layout Toggle -->
-                <button id="layout-toggle" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all text-slate-600 dark:text-slate-400" title="Toggle Layout">
-                    <svg id="layout-horizontal-icon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
-                    <svg id="layout-vertical-icon" class="hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h2m3 0h2a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
-                </button>
-
                 <!-- Theme Toggle -->
                 <button id="theme-toggle" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
                     <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5 text-slate-100" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
@@ -89,65 +85,22 @@
 
         <!-- Main Scrollable Area -->
         <main class="flex-1 overflow-y-auto p-8">
-            <div id="main-container" class="max-w-6xl mx-auto flex flex-col gap-8 transition-all duration-300">
-                <!-- Tasks Table -->
-                <div id="tasks-section" class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead>
-                                <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('name')">
-                                        <div class="flex items-center gap-1">
-                                            Name <span id="sort-name" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
-                                        </div>
-                                    </th>
-                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('task_type')">
-                                        <div class="flex items-center gap-1">
-                                            Type <span id="sort-task_type" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
-                                        </div>
-                                    </th>
-                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('cron')">
-                                        <div class="flex items-center gap-1">
-                                            Schedule <span id="sort-cron" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
-                                        </div>
-                                    </th>
-                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('timezone')">
-                                        <div class="flex items-center gap-1">
-                                            Timezone <span id="sort-timezone" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
-                                        </div>
-                                    </th>
-                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('last_run')">
-                                        <div class="flex items-center gap-1">
-                                            Last Run <span id="sort-last_run" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
-                                        </div>
-                                    </th>
-                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group" onclick="setSort('enabled')">
-                                        <div class="flex items-center gap-1">
-                                            Status <span id="sort-enabled" class="opacity-0 group-hover:opacity-100 transition-opacity">↕</span>
-                                        </div>
-                                    </th>
-                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="task-table-body" class="divide-y divide-slate-100 dark:divide-slate-800">
-                                {{rows}}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Logs Section -->
-                <div id="logs-section" class="bg-slate-900 dark:bg-black rounded-xl shadow-2xl border border-slate-800 dark:border-slate-900 overflow-hidden">
-                    <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
-                        <div class="flex items-center gap-2">
-                            <span class="text-slate-400 font-bold text-xs uppercase tracking-widest">Live Execution Logs</span>
-                            <span class="px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px] font-bold uppercase">Realtime</span>
-                        </div>
-                        <span id="status-indicator" class="text-xs font-medium transition-colors duration-300">Connecting...</span>
-                    </div>
-                    <div id="logs" class="p-6 h-[400px] overflow-y-auto font-mono text-sm leading-relaxed scrollbar-thin scrollbar-thumb-slate-700 text-slate-300">
-                        <!-- Logs will appear here -->
-                    </div>
+            <div class="max-w-6xl mx-auto bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ID</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Time</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Method</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Path</th>
+                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            {{rows}}
+                        </tbody>
+                    </table>
                 </div>
             </div>
             
@@ -155,6 +108,28 @@
                 &copy; 2026 Seungjin Kim. Licensed under MIT or Apache 2.0.
             </footer>
         </main>
+    </div>
+
+    <!-- Modal for details -->
+    <div id="modal" class="modal fixed inset-0 z-50 items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div class="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col border border-slate-200 dark:border-slate-800">
+            <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold">Webhook Details</h3>
+                <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-6">
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Headers</h4>
+                    <pre id="modal-headers" class="p-4 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800 font-mono text-sm overflow-x-auto"></pre>
+                </div>
+                <div>
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Body</h4>
+                    <pre id="modal-body" class="p-4 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800 font-mono text-sm overflow-x-auto"></pre>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -183,7 +158,78 @@
                 localStorage.setItem('sidebar-collapsed', 'true');
             }
         });
+
+        function showDetails(id) {
+            const row = document.getElementById(`row-${id}`);
+            const headers = row.dataset.headers;
+            const body = row.dataset.body;
+            
+            try {
+                const headersObj = JSON.parse(headers);
+                document.getElementById('modal-headers').textContent = JSON.stringify(headersObj, null, 2);
+            } catch (e) {
+                document.getElementById('modal-headers').textContent = headers;
+            }
+            
+            try {
+                const bodyObj = JSON.parse(body);
+                document.getElementById('modal-body').textContent = JSON.stringify(bodyObj, null, 2);
+            } catch (e) {
+                document.getElementById('modal-body').textContent = body;
+            }
+            
+            document.getElementById('modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+        }
+
+        // Close on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        // Close on click outside
+        document.getElementById('modal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('modal')) closeModal();
+        });
+
+        // Theme toggle logic (copied from app.js)
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const themeToggleDarkIcon = document.getElementById('theme-toggle-dark-icon');
+        const themeToggleLightIcon = document.getElementById('theme-toggle-light-icon');
+
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            themeToggleLightIcon.classList.remove('hidden');
+            document.documentElement.classList.add('dark');
+        } else {
+            themeToggleDarkIcon.classList.remove('hidden');
+            document.documentElement.classList.remove('dark');
+        }
+
+        themeToggleBtn.addEventListener('click', function() {
+            themeToggleDarkIcon.classList.toggle('hidden');
+            themeToggleLightIcon.classList.toggle('hidden');
+
+            if (localStorage.getItem('color-theme')) {
+                if (localStorage.getItem('color-theme') === 'light') {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                }
+            } else {
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                }
+            }
+        });
     </script>
-    <script src="/static/js/app.js?v=13"></script>
 </body>
 </html>

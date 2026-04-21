@@ -6,7 +6,7 @@
 Project LACHUOI is named after the Vietnamese word *lá chuối*, meaning "banana leaf."
 
 <div align="center">
-  <img src="screenshots/vertical-theme.png" alt="Dashboard Vertical Layout" width="100%" style="border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 1rem;">
+  <img src="screenshots/dark-theme.png" alt="Dashboard Vertical Layout" width="100%" style="border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 1rem;">
   <p><em>Modern, responsive dashboard featuring real-time task monitoring and controls.</em></p>
 </div>
 

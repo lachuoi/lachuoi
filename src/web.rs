@@ -34,6 +34,7 @@ impl WebServer {
             .route("/auth/github/callback", get(login::github_callback))
             .route("/logout", get(login::logout))
             .route("/task-status", get(handlers::status_page_handler))
+            .route("/webhook-status", get(handlers::webhook_status_page_handler))
             .route("/admin/reload", get(handlers::reload_config_handler))
             .route("/webhook", axum::routing::any(handlers::webhook_handler))
             .route("/webhook/*path", axum::routing::any(handlers::webhook_handler))

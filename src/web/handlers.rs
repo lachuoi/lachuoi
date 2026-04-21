@@ -181,7 +181,56 @@ pub async fn status_page_handler(
     };
 
     let github_login: String = session.get("github_login").await.unwrap().unwrap_or_else(|| "Unknown".to_string());
-    Html(template.replace("{{rows}}", &rows).replace("{{user}}", &github_login)).into_response()
+    let user_initial = github_login.chars().next().unwrap_or('U').to_uppercase().to_string();
+    Html(template.replace("{{rows}}", &rows).replace("{{user}}", &github_login).replace("{{user_initial}}", &user_initial)).into_response()
+}
+
+pub async fn webhook_status_page_handler(
+    State(scheduler): State<Arc<Scheduler>>,
+    session: Session,
+) -> impl IntoResponse {
+    if session.get::<i64>(USER_SESSION_KEY).await.unwrap().is_none() {
+        return Redirect::to("/").into_response();
+    }
+    
+    let db = scheduler.get_db();
+    let webhooks = match db.get_webhooks().await {
+        Ok(w) => w,
+        Err(e) => return Html(format!("Error fetching webhooks: {}", e)).into_response(),
+    };
+    
+    let mut rows = String::new();
+    for webhook in webhooks {
+        let headers_attr = webhook.headers.replace("'", "&apos;");
+        let body_attr = webhook.body.replace("'", "&apos;");
+
+        rows.push_str(&format!(
+            "<tr id='row-{id}' class='border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors' data-headers='{headers}' data-body='{body}'>
+                <td class='px-4 py-3 align-middle text-xs font-mono text-gray-500 dark:text-slate-500'>{id}</td>
+                <td class='px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400'>{time}</td>
+                <td class='px-4 py-3 align-middle'><span class='px-2 py-1 text-[10px] uppercase font-bold rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'>{method}</span></td>
+                <td class='px-4 py-3 align-middle text-sm font-mono text-gray-900 dark:text-slate-100'>{path}</td>
+                <td class='px-4 py-3 align-middle'>
+                    <button class='px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-600 hover:text-white dark:bg-blue-900/20 dark:border-blue-800 dark:hover:bg-blue-600 transition-colors' onclick='showDetails({id})'>View Details</button>
+                </td>
+            </tr>",
+            id = webhook.id,
+            time = webhook.created_at,
+            method = webhook.method,
+            path = webhook.path,
+            headers = headers_attr,
+            body = body_attr
+        ));
+    }
+
+    let template = match std::fs::read_to_string("web/templates/webhook_status.html") {
+        Ok(t) => t,
+        Err(e) => return Html(format!("Error loading template: {}", e)).into_response(),
+    };
+
+    let github_login: String = session.get("github_login").await.unwrap().unwrap_or_else(|| "Unknown".to_string());
+    let user_initial = github_login.chars().next().unwrap_or('U').to_uppercase().to_string();
+    Html(template.replace("{{rows}}", &rows).replace("{{user}}", &github_login).replace("{{user_initial}}", &user_initial)).into_response()
 }
 
 fn format_relative_time(last_run_rfc3339: &Option<String>) -> String {

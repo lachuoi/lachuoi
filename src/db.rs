@@ -266,6 +266,35 @@ impl Db {
 
         Ok(())
     }
+
+    pub async fn get_webhooks(&self) -> Result<Vec<WebhookLog>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut rows = self.conn.query(
+            "SELECT id, path, method, headers, body, created_at FROM lachuoi_webhooks ORDER BY created_at DESC LIMIT 100",
+            ()
+        ).await?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows.next().await? {
+            results.push(WebhookLog {
+                id: row.get(0)?,
+                path: row.get(1)?,
+                method: row.get(2)?,
+                headers: row.get(3)?,
+                body: row.get(4)?,
+                created_at: row.get(5)?,
+            });
+        }
+        Ok(results)
+    }
+}
+
+pub struct WebhookLog {
+    pub id: i64,
+    pub path: String,
+    pub method: String,
+    pub headers: String,
+    pub body: String,
+    pub created_at: String,
 }
 
 #[async_trait]
