@@ -6,7 +6,7 @@ use crate::db::Db;
 use tower_http::services::ServeDir;
 use tower_sessions::{SessionManagerLayer, Expiry};
 
-#[path = "web/handlers.rs"]
+pub mod login;
 mod handlers;
 
 pub struct WebServer {
@@ -29,10 +29,10 @@ impl WebServer {
             .with_expiry(Expiry::OnInactivity(tower_sessions::cookie::time::Duration::days(7)));
 
         let app = Router::new()
-            .route("/", get(handlers::login_page_handler))
-            .route("/auth/github", get(handlers::github_login))
-            .route("/auth/github/callback", get(handlers::github_callback))
-            .route("/logout", get(handlers::logout))
+            .route("/", get(login::login_page_handler))
+            .route("/auth/github", get(login::github_login))
+            .route("/auth/github/callback", get(login::github_callback))
+            .route("/logout", get(login::logout))
             .route("/task-status", get(handlers::status_page_handler))
             .route("/admin/reload", get(handlers::reload_config_handler))
             .route("/tasks", get(handlers::get_tasks_handler))

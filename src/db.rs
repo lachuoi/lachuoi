@@ -30,87 +30,40 @@ impl Db {
 
         let conn = db.connect()?;
 
-        let db_wrapper = Self { conn };
-        db_wrapper.init().await?;
-
-        // Migration: add columns if not exists
-        let _ = db_wrapper.conn.execute("ALTER TABLE cron_tasks ADD COLUMN args TEXT", ()).await;
-        let _ = db_wrapper.conn.execute("ALTER TABLE cron_tasks ADD COLUMN sha256 TEXT", ()).await;
-
-        Ok(db_wrapper)
+        Ok(Self { conn })
     }
 
-    async fn init(
+    pub async fn is_authorized(
         &self,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.conn
-            .execute(
-                "CREATE TABLE IF NOT EXISTS cron_tasks (
-                id TEXT PRIMARY KEY NOT NULL,
-                name TEXT NOT NULL,
-                cron_expr TEXT NOT NULL,
-                timezone TEXT NOT NULL,
-                task_type TEXT NOT NULL DEFAULT 'native',
-                payload TEXT,
-                args TEXT,
-                sha256 TEXT,
-                enabled BOOLEAN NOT NULL DEFAULT 1,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )",
-                (),
+        github_login: &str,
+    ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+        let mut rows = self
+            .conn
+            .query(
+                "SELECT COUNT(*) FROM cron_users WHERE github_login = ?",
+                libsql::params![github_login],
             )
             .await?;
 
-        // We use duration_ms (NULL = not finished/crashed)
-        self.conn
-            .execute(
-                "CREATE TABLE IF NOT EXISTS cron_logs (
-                id TEXT PRIMARY KEY NOT NULL,
-                task_id TEXT NOT NULL,
-                run_at DATETIME NOT NULL,
-                duration_ms INTEGER,
-                FOREIGN KEY(task_id) REFERENCES cron_tasks(id)
-            )",
-                (),
-            )
-            .await?;
-
-        self.conn
-            .execute(
-                "CREATE TABLE IF NOT EXISTS cron_outputs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                log_id TEXT NOT NULL,
-                output TEXT NOT NULL,
-                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY(log_id) REFERENCES cron_logs(id)
-            )",
-                (),
-            )
-            .await?;
-
-        self.conn
-            .execute(
-                "CREATE TABLE IF NOT EXISTS cron_sessions (
-                id TEXT PRIMARY KEY NOT NULL,
-                record BLOB NOT NULL,
-                expiry_date INTEGER NOT NULL
-            )",
-                (),
-            )
-            .await?;
-
-        Ok(())
+        if let Some(row) = rows.next().await? {
+            let count: i64 = row.get(0)?;
+            Ok(count > 0)
+        } else {
+            Ok(false)
+        }
     }
 
     pub async fn save_log_line(
         &self,
         log_id: Uuid,
+        module: &str,
         output: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "INSERT INTO cron_outputs (log_id, output) VALUES (?, ?)",
+            "INSERT INTO cron_outputs (log_id, module, output) VALUES (?, ?, ?)",
             libsql::params![
                 log_id.to_string(),
+                module.to_string(),
                 output.to_string()
             ]
         )

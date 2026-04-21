@@ -72,8 +72,10 @@ impl wasmtime_wasi::HostOutputStream for PrefixPipe {
             // Save to database
             let db = self.db.clone();
             let log_id = self.log_id;
+            let module = self.prefix.clone();
+            let line_content = line.to_string();
             tokio::spawn(async move {
-                let _ = db.save_log_line(log_id, &msg).await;
+                let _ = db.save_log_line(log_id, &module, &line_content).await;
             });
         }
         Ok(())
@@ -750,7 +752,7 @@ impl Scheduler {
                         let start = std::time::Instant::now();
                         let start_msg = format!("[{}] Starting task...", name);
                         println!("{}", start_msg);
-                        let _ = db.save_log_line(log_id, &start_msg).await;
+                        let _ = db.save_log_line(log_id, &name, "Starting task...").await;
                         let _ = log_sender.send(start_msg);
                         
                         let result = handler(log_id, db.clone(), log_sender.clone()).await;
@@ -759,14 +761,14 @@ impl Scheduler {
                         if let Err(e) = &result {
                             let err_msg = format!("[{}] Task failed: {}", name, e);
                             println!("{}", err_msg);
-                            let _ = db.save_log_line(log_id, &err_msg).await;
+                            let _ = db.save_log_line(log_id, &name, &format!("Task failed: {}", e)).await;
                             let _ = log_sender.send(err_msg);
                         }
                         
                         let duration_ms = start.elapsed().as_millis() as u64;
                         let finish_msg = format!("[{}] Task finished in {}ms", name, duration_ms);
                         println!("{}", finish_msg);
-                        let _ = db.save_log_line(log_id, &finish_msg).await;
+                        let _ = db.save_log_line(log_id, &name, &format!("Task finished in {}ms", duration_ms)).await;
                         let _ = log_sender.send(finish_msg);
                         
                         let _ = db.log_execution_finish(log_id, duration_ms).await;
