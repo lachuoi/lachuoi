@@ -271,7 +271,7 @@ impl Db {
         method: &str,
         headers: &str,
         body: &str,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<WebhookLog, Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
             "INSERT INTO lachuoi_webhooks (path, method, headers, body) VALUES (?, ?, ?, ?)",
             libsql::params![
@@ -283,7 +283,17 @@ impl Db {
         )
         .await?;
 
-        Ok(())
+        let row_id = self.conn.last_insert_rowid();
+        let created_at = Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+
+        Ok(WebhookLog {
+            id: row_id,
+            path: path.to_string(),
+            method: method.to_string(),
+            headers: headers.to_string(),
+            body: body.to_string(),
+            created_at,
+        })
     }
 
     pub async fn get_webhooks(&self) -> Result<Vec<WebhookLog>, Box<dyn std::error::Error + Send + Sync>> {
@@ -307,6 +317,7 @@ impl Db {
     }
 }
 
+#[derive(Clone, serde::Serialize)]
 pub struct WebhookLog {
     pub id: i64,
     pub path: String,

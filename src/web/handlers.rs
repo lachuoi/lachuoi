@@ -30,7 +30,10 @@ pub async fn webhook_handler(
     let headers_json = serde_json::to_string(&headers_map).unwrap_or_default();
 
     match db.save_webhook(&path, &method_str, &headers_json, &body).await {
-        Ok(_) => (StatusCode::OK, "OK"),
+        Ok(webhook) => {
+            scheduler.broadcast_webhook(webhook);
+            (StatusCode::OK, "OK")
+        },
         Err(e) => {
             eprintln!("Failed to save webhook: {}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error")
@@ -47,6 +50,7 @@ pub async fn events_handler(
     }
     let log_rx = scheduler.subscribe_logs();
     let status_rx = scheduler.subscribe_status();
+    let webhook_rx = scheduler.subscribe_webhooks();
     
     let initial_msg = futures_util::stream::once(async {
         Ok(Event::default().data("Log stream connected"))
@@ -71,7 +75,21 @@ pub async fn events_handler(
             }
         });
 
-    let combined = StreamExt::merge(initial_msg.chain(log_stream), status_stream);
+    let webhook_stream = tokio_stream::wrappers::BroadcastStream::new(webhook_rx)
+        .map(|msg| {
+            match msg {
+                Ok(webhook) => {
+                    let json = serde_json::to_string(&webhook).unwrap_or_default();
+                    Ok(Event::default().event("webhook").data(json))
+                },
+                Err(_) => Ok(Event::default().event("log").data("... (webhook buffer overflowed)")),
+            }
+        });
+
+    let combined = StreamExt::merge(
+        StreamExt::merge(initial_msg.chain(log_stream), status_stream),
+        webhook_stream
+    );
 
     Ok(Sse::new(combined).keep_alive(axum::response::sse::KeepAlive::default()))
 }

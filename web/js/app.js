@@ -1,6 +1,7 @@
 const logsDiv = document.getElementById('logs');
 const statusIndicator = document.getElementById('status-indicator');
 const tableBody = document.getElementById('task-table-body');
+const webhookTableBody = document.getElementById('webhook-table-body');
 const eventSource = new EventSource('/events');
 
 // --- Initial Logs ---
@@ -268,6 +269,38 @@ eventSource.addEventListener('log', (event) => {
 eventSource.addEventListener('status', (event) => {
     latestTasks = JSON.parse(event.data);
     renderTable();
+});
+
+eventSource.addEventListener('webhook', (event) => {
+    if (!webhookTableBody) return;
+    
+    const webhook = JSON.parse(event.data);
+    const headers = JSON.parse(webhook.headers);
+    const fromAddress = headers['x-forwarded-for'] || '-';
+    
+    const row = document.createElement('tr');
+    row.id = `row-${webhook.id}`;
+    row.className = 'border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors';
+    row.setAttribute('data-headers', webhook.headers.replace(/'/g, '&apos;'));
+    row.setAttribute('data-body', webhook.body.replace(/'/g, '&apos;'));
+    
+    row.innerHTML = `
+        <td class='px-4 py-3 align-middle text-xs font-mono text-gray-500 dark:text-slate-500'>${webhook.id}</td>
+        <td class='px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400'>${webhook.created_at}</td>
+        <td class='px-4 py-3 align-middle'><span class='px-2 py-1 text-[10px] uppercase font-bold rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'>${webhook.method}</span></td>
+        <td class='px-4 py-3 align-middle text-sm font-mono text-gray-900 dark:text-slate-100'>${webhook.path}</td>
+        <td class='px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400'>${fromAddress}</td>
+        <td class='px-4 py-3 align-middle'>
+            <button class='px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-600 hover:text-white dark:bg-blue-900/20 dark:border-blue-800 dark:hover:bg-blue-600 transition-colors' onclick='showDetails(${webhook.id})'>View Details</button>
+        </td>
+    `;
+    
+    webhookTableBody.insertBefore(row, webhookTableBody.firstChild);
+    
+    // Prune to 100 rows
+    while (webhookTableBody.children.length > 100) {
+        webhookTableBody.removeChild(webhookTableBody.lastChild);
+    }
 });
 
 async function toggleTask(taskId, enabled) {

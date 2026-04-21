@@ -29,6 +29,7 @@ pub struct Scheduler {
     plugins_dir: std::path::PathBuf,
     log_sender: tokio::sync::broadcast::Sender<String>,
     status_sender: tokio::sync::broadcast::Sender<Vec<crate::task::TaskStatus>>,
+    webhook_sender: tokio::sync::broadcast::Sender<crate::db::WebhookLog>,
 }
 
 impl Scheduler {
@@ -39,6 +40,7 @@ impl Scheduler {
         let wasm_engine = Engine::new(&config).expect("Failed to create Wasmtime engine");
         let (log_sender, _) = tokio::sync::broadcast::channel(100);
         let (status_sender, _) = tokio::sync::broadcast::channel(100);
+        let (webhook_sender, _) = tokio::sync::broadcast::channel(100);
 
         Self {
             tasks: Arc::new(RwLock::new(HashMap::new())),
@@ -50,6 +52,7 @@ impl Scheduler {
             plugins_dir: std::path::PathBuf::from("plugins"),
             log_sender,
             status_sender,
+            webhook_sender,
         }
     }
 
@@ -69,6 +72,14 @@ impl Scheduler {
 
     pub fn subscribe_status(&self) -> tokio::sync::broadcast::Receiver<Vec<crate::task::TaskStatus>> {
         self.status_sender.subscribe()
+    }
+
+    pub fn subscribe_webhooks(&self) -> tokio::sync::broadcast::Receiver<crate::db::WebhookLog> {
+        self.webhook_sender.subscribe()
+    }
+
+    pub fn broadcast_webhook(&self, webhook: crate::db::WebhookLog) {
+        let _ = self.webhook_sender.send(webhook);
     }
 
     pub fn set_plugins_dir(&mut self, path: &str) {
