@@ -1,22 +1,37 @@
-# La Chuoi - WASI Runtime Framework
+# La Chuoi - WASI Runtime & Service Framework
 
 > [!NOTE]
 > The original Spin Framework and GPLv4-based code have been moved to the `legacy-gpl-version` branch. This is a new implementation of La Chuoi built from scratch: a Wasmtime-based WASI runtime framework licensed under MIT/Apache 2.0.
 
-<img src="screenshot.png" alt="Dashboard Screenshot" width="800" style="border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 2rem;">
+Project LACHUOI is named after the Vietnamese word *lá chuối*, meaning "banana leaf."
 
-A high-performance, distributed task management engine built with Rust. This scheduler supports both **native Rust handlers** and **sandboxed WASM plugins**, featuring a real-time web dashboard with GitHub OAuth security and persistent execution history.
+<div align="center">
+  <img src="screenshots/horizontal-theme.png" alt="Dashboard Horizontal Layout" width="100%" style="border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 1rem;">
+  <p><em>Modern, responsive dashboard featuring real-time task monitoring and controls.</em></p>
+</div>
+
+A high-performance, distributed WASI runtime and task management engine built with Rust. Beyond traditional **cron-based scheduling**, La Chuoi serves as a comprehensive **WASI runtime environment** capable of hosting web services, processing webhooks, and executing sandboxed components with full **WASI-HTTP** support.
 
 ## 🚀 Key Features
 
 - **Hybrid Execution**: Run native Rust tasks or secure, sandboxed WASM components.
+- **Web Services & Webhooks**: Integrated support for receiving and processing webhooks, enabling event-driven task execution and web-based servicing.
+- **Universal WASI Runtime**: Full support for WASI Preview 1 and the modern Component Model (Preview 2).
+- **WASI-HTTP Support**: Sandboxed components can perform secure outbound HTTP requests and participate in web-based workflows.
+
+### 🎨 Modern Dashboard & Theme Support
+<div align="center">
+  <img src="screenshots/dark-light-theme.png" alt="Dark and Light Theme Support" width="100%" style="border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-top: 1rem; margin-bottom: 1rem;">
+</div>
+
+- **Dark/Light Theme**: Built-in support for system-preferred or manual theme switching.
+- **Real-time Monitoring**: Live execution logs and status updates via Server-Sent Events (SSE).
+- **Interactive Controls**: Enable, disable, and sort tasks directly from the web UI.
+
 - **Remote WASM**: Download WASM binaries directly from HTTPS URLs with mandatory verification.
 - **WASM Security**: Mandatory SHA256 checksum verification for all WASM binaries (local or remote).
-- **Modern Dashboard**: Responsive UI built with Tailwind CSS, featuring **Dark/Light theme** support.
-- **Real-time Monitoring**: Live execution logs and status updates via Server-Sent Events (SSE).
-- **Persistent State**: Database-backed sessions and execution history (Turso/libSQL).
+- **Persistent State**: Database-backed sessions, execution history, and webhook logs (Turso/libSQL).
 - **Zero-Downtime Reloads**: Hot-reload `cron.toml` configuration without stopping the service.
-- **Interactive Controls**: Enable, disable, and sort tasks directly from the web UI.
 
 ---
 
@@ -97,15 +112,14 @@ If you modify `cron.toml`, you can reload the configuration without restarting t
 ## 🧩 Architecture
 
 ### Native Handlers
-Native tasks are modularized in `src/native_handlers.rs`. To add a new native task:
-1. Implement the logic in `src/native_handlers.rs`.
-2. Register it in the `register_all` function.
-3. Add a corresponding entry in `cron.toml`.
+Native tasks are modularized in `src/native_handlers.rs`. These are compiled directly into the binary for performance-critical logic.
 
-### WASM Plugins
-WASM tasks run in a strictly sandboxed environment using **Wasmtime**.
+### WASM Runtime & Services
+WASM tasks and services run in a strictly sandboxed environment using **Wasmtime**.
 - **SHA256 Check**: The scheduler verifies the binary hash before every execution.
-- **Argument Resolution**: Supports dynamic argument injection (e.g., `file:~/.ssh/id_ed25519`).
+- **WASI-HTTP**: Components can interact with external web services securely.
+- **Webhook Integration**: Inbound webhooks are logged and can be used to trigger specific task logic.
+- **Argument Resolution**: Supports dynamic argument injection (e.g., `file:~/.ssh/id_ed25519` or `env:VAR_NAME`).
 - **Standard Output**: Logs are captured via `PrefixPipe` and streamed to the UI in real-time.
 
 ---
@@ -114,9 +128,11 @@ WASM tasks run in a strictly sandboxed environment using **Wasmtime**.
 
 Accessible at `http://localhost:9130` (default port).
 
-- **Sorting**: Click any column header (Name, Type, Last Run, etc.) to sort. "Last Run" uses chronological date sorting.
-- **Controls**: Use the **Enable/Disable** buttons to pause tasks without removing them from the configuration.
+- **Monitoring**: View all tasks, their schedules, and real-time status.
+- **Sorting**: Click any column header to sort tasks.
+- **Controls**: Enable or disable tasks directly from the UI.
 - **Live Logs**: View the last 1000 lines of execution logs in the real-time console.
+- **Webhook Logs**: Track incoming webhook requests and payloads in the database.
 
 ---
 
