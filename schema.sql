@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS lachuoi_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     github_login TEXT UNIQUE NOT NULL,
+    github_avatar_url TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

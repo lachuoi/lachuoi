@@ -21,6 +21,7 @@ pub struct AuthRequest {
 struct GitHubUser {
     id: i64,
     login: String,
+    avatar_url: String,
 }
 
 #[derive(Deserialize)]
@@ -106,6 +107,7 @@ pub async fn github_callback(
         Ok(true) => {
             session.insert(USER_SESSION_KEY, user_info.id).await.unwrap();
             session.insert("github_login", user_info.login).await.unwrap();
+            session.insert("github_avatar_url", user_info.avatar_url).await.unwrap();
             Redirect::to("/task-status").into_response()
         }
         Ok(false) => {

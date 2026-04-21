@@ -1,4 +1,4 @@
-use axum::{Json, extract::{State, Query, Path}, response::{Html, Redirect, IntoResponse}, response::sse::{Event, Sse}, http::{StatusCode, Method, HeaderMap}};
+use axum::{Json, extract::{State, Path}, response::{Html, Redirect, IntoResponse}, response::sse::{Event, Sse}, http::{StatusCode, Method, HeaderMap}};
 use std::sync::Arc;
 use uuid::Uuid;
 use crate::scheduler::Scheduler;
@@ -181,8 +181,20 @@ pub async fn status_page_handler(
     };
 
     let github_login: String = session.get("github_login").await.unwrap().unwrap_or_else(|| "Unknown".to_string());
+    let github_avatar_url: Option<String> = session.get("github_avatar_url").await.unwrap();
     let user_initial = github_login.chars().next().unwrap_or('U').to_uppercase().to_string();
-    Html(template.replace("{{rows}}", &rows).replace("{{user}}", &github_login).replace("{{user_initial}}", &user_initial)).into_response()
+    
+    let user_avatar_html = if let Some(url) = github_avatar_url {
+        format!("<img src='{}' class='min-w-[2rem] h-8 rounded-full' alt='{}'>", url, github_login)
+    } else {
+        format!("<div class='min-w-[2rem] h-8 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs'>{}</div>", user_initial)
+    };
+
+    Html(template
+        .replace("{{rows}}", &rows)
+        .replace("{{user}}", &github_login)
+        .replace("{{user_avatar}}", &user_avatar_html))
+        .into_response()
 }
 
 pub async fn webhook_status_page_handler(
@@ -229,8 +241,20 @@ pub async fn webhook_status_page_handler(
     };
 
     let github_login: String = session.get("github_login").await.unwrap().unwrap_or_else(|| "Unknown".to_string());
+    let github_avatar_url: Option<String> = session.get("github_avatar_url").await.unwrap();
     let user_initial = github_login.chars().next().unwrap_or('U').to_uppercase().to_string();
-    Html(template.replace("{{rows}}", &rows).replace("{{user}}", &github_login).replace("{{user_initial}}", &user_initial)).into_response()
+    
+    let user_avatar_html = if let Some(url) = github_avatar_url {
+        format!("<img src='{}' class='min-w-[2rem] h-8 rounded-full' alt='{}'>", url, github_login)
+    } else {
+        format!("<div class='min-w-[2rem] h-8 bg-slate-200 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-400 font-bold text-xs'>{}</div>", user_initial)
+    };
+
+    Html(template
+        .replace("{{rows}}", &rows)
+        .replace("{{user}}", &github_login)
+        .replace("{{user_avatar}}", &user_avatar_html))
+        .into_response()
 }
 
 fn format_relative_time(last_run_rfc3339: &Option<String>) -> String {
