@@ -250,16 +250,32 @@ pub async fn status_page_handler(
         .into_response()
 }
 
+#[derive(Deserialize)]
+pub struct PaginationParams {
+    pub page: Option<usize>,
+}
+
 pub async fn webhook_status_page_handler(
     State(scheduler): State<Arc<Scheduler>>,
     session: Session,
+    axum::extract::Query(params): axum::extract::Query<PaginationParams>,
 ) -> impl IntoResponse {
     if session.get::<i64>(USER_SESSION_KEY).await.unwrap().is_none() {
         return Redirect::to("/").into_response();
     }
     
+    let page = params.page.unwrap_or(1).max(1);
+    let limit = 15;
+    let offset = (page - 1) * limit;
+
     let db = scheduler.get_db();
-    let webhooks = match db.get_webhooks().await {
+    let total_count = match db.get_webhooks_count().await {
+        Ok(c) => c,
+        Err(e) => return Html(format!("Error fetching webhook count: {}", e)).into_response(),
+    };
+
+    let total_pages = (total_count + limit - 1) / limit;
+    let webhooks = match db.get_webhooks_paginated(limit, offset).await {
         Ok(w) => w,
         Err(e) => return Html(format!("Error fetching webhooks: {}", e)).into_response(),
     };
@@ -298,6 +314,46 @@ pub async fn webhook_status_page_handler(
         ));
     }
 
+    let mut pagination_html = String::new();
+    if total_pages > 1 {
+        pagination_html.push_str("<div class='flex items-center justify-between px-4 py-3 border-t border-slate-200 dark:border-slate-800'>");
+        pagination_html.push_str("<div class='flex-1 flex justify-between sm:hidden'>");
+        
+        if page > 1 {
+            pagination_html.push_str(&format!("<a href='?page={}' class='relative inline-flex items-center px-4 py-2 border border-slate-300 dark:border-slate-700 text-sm font-medium rounded-md text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'>Previous</a>", page - 1));
+        }
+        if page < total_pages {
+            pagination_html.push_str(&format!("<a href='?page={}' class='relative inline-flex items-center px-4 py-2 ml-3 border border-slate-300 dark:border-slate-700 text-sm font-medium rounded-md text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700'>Next</a>", page + 1));
+        }
+        
+        pagination_html.push_str("</div>");
+        pagination_html.push_str("<div class='hidden sm:flex-1 sm:flex sm:items-center sm:justify-between'>");
+        pagination_html.push_str("<div>");
+        pagination_html.push_str(&format!("<p class='text-sm text-slate-700 dark:text-slate-400'>Showing <span class='font-medium'>{}</span> to <span class='font-medium'>{}</span> of <span class='font-medium'>{}</span> results</p>", offset + 1, (offset + limit).min(total_count), total_count));
+        pagination_html.push_str("</div>");
+        pagination_html.push_str("<div><nav class='relative z-0 inline-flex rounded-md shadow-sm -space-x-px' aria-label='Pagination'>");
+        
+        // Previous page button
+        let prev_disabled = if page == 1 { "pointer-events-none opacity-50" } else { "" };
+        pagination_html.push_str(&format!("<a href='?page={}' class='relative inline-flex items-center px-2 py-2 rounded-l-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 {}'><svg class='h-5 w-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M15 19l-7-7 7-7'></path></svg></a>", page.saturating_sub(1), prev_disabled));
+        
+        // Page numbers
+        let start_page = (page as isize - 2).max(1) as usize;
+        let end_page = (start_page + 4).min(total_pages);
+        let start_page = (end_page as isize - 4).max(1) as usize;
+
+        for i in start_page..=end_page {
+            let active_class = if i == page { "bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 z-10 border-blue-500 dark:border-blue-800" } else { "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700" };
+            pagination_html.push_str(&format!("<a href='?page={}' class='relative inline-flex items-center px-4 py-2 border text-sm font-medium {}'>{}</a>", i, active_class, i));
+        }
+
+        // Next page button
+        let next_disabled = if page == total_pages { "pointer-events-none opacity-50" } else { "" };
+        pagination_html.push_str(&format!("<a href='?page={}' class='relative inline-flex items-center px-2 py-2 rounded-r-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 {}'><svg class='h-5 w-5' fill='none' stroke='currentColor' viewBox='0 0 24 24'><path stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M9 5l7 7-7 7'></path></svg></a>", (page + 1).min(total_pages), next_disabled));
+        
+        pagination_html.push_str("</nav></div></div></div>");
+    }
+
     let template = match std::fs::read_to_string("web/templates/webhook_status.html") {
         Ok(t) => t,
         Err(e) => return Html(format!("Error loading template: {}", e)).into_response(),
@@ -315,6 +371,7 @@ pub async fn webhook_status_page_handler(
 
     Html(template
         .replace("{{rows}}", &rows)
+        .replace("{{pagination}}", &pagination_html)
         .replace("{{user}}", &github_login)
         .replace("{{user_avatar}}", &user_avatar_html))
         .into_response()

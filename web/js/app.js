@@ -270,6 +270,12 @@
 
         eventSource.addEventListener('webhook', (event) => {
             if (!webhookTableBody) return;
+            
+            // Only prepend if we are on page 1 (or no page param)
+            const urlParams = new URLSearchParams(window.location.search);
+            const currentPage = parseInt(urlParams.get('page') || '1');
+            if (currentPage !== 1) return;
+
             try {
                 const webhook = JSON.parse(event.data);
                 const headers = JSON.parse(webhook.headers);
@@ -292,7 +298,9 @@
                     </td>
                 `;
                 webhookTableBody.insertBefore(row, webhookTableBody.firstChild);
-                while (webhookTableBody.children.length > 100) {
+                
+                // Keep only 15 items per page on the first page
+                while (webhookTableBody.children.length > 15) {
                     webhookTableBody.removeChild(webhookTableBody.lastChild);
                 }
             } catch (e) { console.error("Error parsing webhook JSON:", e); }

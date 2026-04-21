@@ -297,9 +297,13 @@ impl Db {
     }
 
     pub async fn get_webhooks(&self) -> Result<Vec<WebhookLog>, Box<dyn std::error::Error + Send + Sync>> {
+        self.get_webhooks_paginated(100, 0).await
+    }
+
+    pub async fn get_webhooks_paginated(&self, limit: usize, offset: usize) -> Result<Vec<WebhookLog>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT id, path, method, headers, body, created_at FROM lachuoi_webhooks ORDER BY created_at DESC LIMIT 100",
-            ()
+            "SELECT id, path, method, headers, body, created_at FROM lachuoi_webhooks ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            libsql::params![limit as i64, offset as i64]
         ).await?;
 
         let mut results = Vec::new();
@@ -314,6 +318,20 @@ impl Db {
             });
         }
         Ok(results)
+    }
+
+    pub async fn get_webhooks_count(&self) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+        let mut rows = self.conn.query(
+            "SELECT COUNT(*) FROM lachuoi_webhooks",
+            ()
+        ).await?;
+
+        if let Some(row) = rows.next().await? {
+            let count: i64 = row.get(0)?;
+            Ok(count as usize)
+        } else {
+            Ok(0)
+        }
     }
 }
 
