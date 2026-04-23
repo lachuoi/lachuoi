@@ -64,19 +64,21 @@ async fn main() {
     lachuoi::native_handlers::register_all(&scheduler).await;
     lachuoi::wasm_handlers::register_all(&scheduler).await;
 
-    // 4. Load state and sync with configuration
-    let _ = scheduler
+    // 4. Sync with cron.toml (DB only) then load state
+    if std::path::Path::new("cron.toml").exists() {
+        println!("Syncing database with cron.toml...");
+        let config = lachuoi::config::AppConfig::load("cron.toml")
+            .expect("Failed to load cron.toml");
+        scheduler
+            .sync_db_only(&config)
+            .await
+            .expect("Failed to sync DB with config");
+    }
+
+    scheduler
         .load_tasks()
         .await
         .expect("Failed to load tasks from DB");
-
-    if std::path::Path::new("cron.toml").exists() {
-        println!("Syncing with cron.toml...");
-        scheduler
-            .reload_from_file("cron.toml")
-            .await
-            .expect("Failed to sync config");
-    }
 
     // 5. Start the scheduler background loop
     scheduler.clone().start().await;

@@ -16,6 +16,13 @@ pub struct TaskStatus {
     pub last_duration_ms: Option<u64>,
     pub last_failed: bool,
     pub enabled: bool,
+    pub last_log_id: Option<Uuid>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+pub struct LogMessage {
+    pub task_id: Uuid,
+    pub text: String,
 }
 
 // Represents a scheduled task with its cron schedule and execution logic
@@ -34,6 +41,7 @@ pub struct ScheduledTask {
     pub last_duration: Option<u64>,
     pub last_failed: bool,
     pub enabled: bool,
+    pub last_log_id: Option<Uuid>,
 }
 
 impl ScheduledTask {
@@ -64,6 +72,7 @@ impl ScheduledTask {
             last_duration: None,
             last_failed: false,
             enabled: true,
+            last_log_id: None,
         })
     }
 
@@ -117,6 +126,7 @@ impl ScheduledTask {
             last_duration: None,
             last_failed: false,
             enabled,
+            last_log_id: None,
         })
     }
 

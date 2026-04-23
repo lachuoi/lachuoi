@@ -177,12 +177,26 @@ impl Db {
         &self,
         id: Uuid,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        self.conn
-            .execute(
-                "DELETE FROM lachuoi_tasks WHERE id = ?",
-                libsql::params![id.to_string()],
-            )
-            .await?;
+        let id_str = id.to_string();
+
+        // 1. Delete outputs associated with logs of this task
+        self.conn.execute(
+            "DELETE FROM lachuoi_outputs WHERE log_id IN (SELECT id FROM lachuoi_logs WHERE task_id = ?)",
+            libsql::params![id_str.clone()]
+        ).await?;
+
+        // 2. Delete logs of this task
+        self.conn.execute(
+            "DELETE FROM lachuoi_logs WHERE task_id = ?",
+            libsql::params![id_str.clone()]
+        ).await?;
+
+        // 3. Delete the task itself
+        self.conn.execute(
+            "DELETE FROM lachuoi_tasks WHERE id = ?",
+            libsql::params![id_str]
+        ).await?;
+
         Ok(())
     }
 
@@ -227,21 +241,40 @@ impl Db {
 
     pub async fn get_latest_task_logs(
         &self,
-    ) -> Result<std::collections::HashMap<Uuid, (String, Option<i64>)>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<std::collections::HashMap<Uuid, (Uuid, String, Option<i64>)>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT task_id, run_at, duration_ms FROM lachuoi_logs WHERE (task_id, run_at) IN (SELECT task_id, MAX(run_at) FROM lachuoi_logs WHERE duration_ms IS NOT NULL GROUP BY task_id)",
+            "SELECT id, task_id, run_at, duration_ms FROM lachuoi_logs WHERE (task_id, run_at) IN (SELECT task_id, MAX(run_at) FROM lachuoi_logs WHERE duration_ms IS NOT NULL GROUP BY task_id)",
             ()
         ).await?;
 
         let mut results = std::collections::HashMap::new();
         while let Some(row) = rows.next().await? {
-            let task_id_str: String = row.get(0)?;
-            let run_at: String = row.get(1)?;
-            let duration_ms: Option<i64> = row.get(2)?;
+            let id_str: String = row.get(0)?;
+            let task_id_str: String = row.get(1)?;
+            let run_at: String = row.get(2)?;
+            let duration_ms: Option<i64> = row.get(3)?;
 
-            if let Ok(task_id) = Uuid::parse_str(&task_id_str) {
-                results.insert(task_id, (run_at, duration_ms));
+            if let (Ok(log_id), Ok(task_id)) = (Uuid::parse_str(&id_str), Uuid::parse_str(&task_id_str)) {
+                results.insert(task_id, (log_id, run_at, duration_ms));
             }
+        }
+        Ok(results)
+    }
+
+    pub async fn get_logs_by_id(
+        &self,
+        log_id: Uuid,
+    ) -> Result<Vec<(Option<Uuid>, String, String)>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut rows = self.conn.query(
+            "SELECT l.task_id, o.output, o.created_at FROM lachuoi_outputs o JOIN lachuoi_logs l ON o.log_id = l.id WHERE o.log_id = ? ORDER BY o.created_at ASC",
+            libsql::params![log_id.to_string()]
+        ).await?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows.next().await? {
+            let task_id_str: String = row.get(0)?;
+            let task_id = Uuid::parse_str(&task_id_str).ok();
+            results.push((task_id, row.get(1)?, row.get(2)?));
         }
         Ok(results)
     }
@@ -249,17 +282,19 @@ impl Db {
     pub async fn get_initial_logs(
         &self,
         limit: usize,
-    ) -> Result<Vec<(String, String)>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<(Option<Uuid>, String, String)>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT output, created_at FROM lachuoi_outputs ORDER BY created_at DESC LIMIT ?",
+            "SELECT l.task_id, o.output, o.created_at FROM lachuoi_outputs o JOIN lachuoi_logs l ON o.log_id = l.id ORDER BY o.created_at DESC LIMIT ?",
             libsql::params![limit as i64]
         ).await?;
 
         let mut results = Vec::new();
         while let Some(row) = rows.next().await? {
-            let output: String = row.get(0)?;
-            let created_at: String = row.get(1)?;
-            results.push((output, created_at));
+            let task_id_str: String = row.get(0)?;
+            let task_id = Uuid::parse_str(&task_id_str).ok();
+            let output: String = row.get(1)?;
+            let created_at: String = row.get(2)?;
+            results.push((task_id, output, created_at));
         }
         results.reverse();
         Ok(results)
@@ -332,6 +367,76 @@ impl Db {
         } else {
             Ok(0)
         }
+    }
+
+    pub async fn delete_webhook(&self, id: i64) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.conn.execute(
+            "DELETE FROM lachuoi_webhooks WHERE id = ?",
+            libsql::params![id]
+        ).await?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    async fn setup_db() -> Db {
+        let db = Db::new(":memory:", None).await.unwrap();
+        db.conn.execute("PRAGMA foreign_keys = ON;", ()).await.unwrap();
+        let schema = std::fs::read_to_string("schema.sql").unwrap();
+        for statement in schema.split(";") {
+            let statement = statement.trim();
+            if !statement.is_empty() {
+                db.conn.execute(statement, ()).await.unwrap();
+            }
+        }
+        db
+    }
+
+    #[tokio::test]
+    async fn test_remove_task_with_logs() {
+        let db = setup_db().await;
+        let task_id = Uuid::new_v4();
+
+        // 1. Create a task
+        db.save_task(
+            task_id,
+            "test_task",
+            "* * * * *",
+            "UTC",
+            "native",
+            None,
+            None,
+            None,
+            None,
+            true
+        ).await.unwrap();
+
+        // 2. Create a log for the task
+        let log_id = db.log_execution_start(task_id).await.unwrap();
+        db.log_execution_finish(log_id, 100).await.unwrap();
+
+        // 3. Create an output for the log
+        db.save_log_line(log_id, "test_module", "test_output").await.unwrap();
+
+        // 4. Attempt to remove the task
+        db.remove_task(task_id).await.expect("Failed to remove task with logs");
+
+        // 5. Verify task is gone
+        let tasks = db.get_tasks().await.unwrap();
+        assert!(tasks.iter().all(|(id, _, _, _, _, _, _, _, _, _)| *id != task_id));
+
+        // 6. Verify logs and outputs are gone (indirectly, but good to check)
+        let mut rows = db.conn.query("SELECT COUNT(*) FROM lachuoi_logs WHERE task_id = ?", libsql::params![task_id.to_string()]).await.unwrap();
+        let count: i64 = rows.next().await.unwrap().unwrap().get(0).unwrap();
+        assert_eq!(count, 0);
+
+        let mut rows = db.conn.query("SELECT COUNT(*) FROM lachuoi_outputs WHERE log_id = ?", libsql::params![log_id.to_string()]).await.unwrap();
+        let count: i64 = rows.next().await.unwrap().unwrap().get(0).unwrap();
+        assert_eq!(count, 0);
     }
 }
 

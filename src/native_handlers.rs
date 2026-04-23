@@ -5,6 +5,7 @@ use std::future::Future;
 use uuid::Uuid;
 use crate::db::Db;
 use crate::scheduler::Scheduler;
+use crate::task::LogMessage;
 
 /// Registers all native handlers to the provided scheduler
 pub async fn register_all(scheduler: &Scheduler) {
@@ -20,8 +21,8 @@ pub async fn register_all(scheduler: &Scheduler) {
 }
 
 /// Heartbeat handler with incrementing counter
-fn heartbeat_handler(counter: Arc<AtomicU32>) -> Arc<dyn Fn(Uuid, Db, tokio::sync::broadcast::Sender<String>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync> {
-    Arc::new(move |log_id, db, log_sender| {
+fn heartbeat_handler(counter: Arc<AtomicU32>) -> Arc<dyn Fn(Uuid, Uuid, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync> {
+    Arc::new(move |log_id, task_id, db, log_sender| {
         let counter = Arc::clone(&counter);
         Box::pin(async move {
             let count = counter.fetch_add(1, Ordering::SeqCst);
@@ -29,32 +30,32 @@ fn heartbeat_handler(counter: Arc<AtomicU32>) -> Arc<dyn Fn(Uuid, Db, tokio::syn
             let msg = format!("[heartbeat] {}", raw_msg);
             println!("{}", msg);
             let _ = db.save_log_line(log_id, "heartbeat", &raw_msg).await;
-            let _ = log_sender.send(msg);
+            let _ = log_sender.send(LogMessage { task_id, text: msg });
             Ok(())
         }) as Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
     })
 }
 
 /// Hourly report placeholder
-fn hourly_report_handler(log_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<String>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> {
+fn hourly_report_handler(log_id: Uuid, task_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> {
     Box::pin(async move {
         let raw_msg = "Generating hourly report...";
         let msg = format!("[hourly-report] {}", raw_msg);
         println!("{}", msg);
         let _ = db.save_log_line(log_id, "hourly-report", raw_msg).await;
-        let _ = log_sender.send(msg);
+        let _ = log_sender.send(LogMessage { task_id, text: msg });
         Ok(())
     })
 }
 
 /// Cache cleanup placeholder
-fn cache_cleanup_handler(log_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<String>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> {
+fn cache_cleanup_handler(log_id: Uuid, task_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> {
     Box::pin(async move {
         let raw_msg = "Cleaning up cache...";
         let msg = format!("[cache-cleanup] {}", raw_msg);
         println!("{}", msg);
         let _ = db.save_log_line(log_id, "cache-cleanup", raw_msg).await;
-        let _ = log_sender.send(msg);
+        let _ = log_sender.send(LogMessage { task_id, text: msg });
         Ok(())
     })
 }

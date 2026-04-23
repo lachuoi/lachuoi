@@ -18,7 +18,7 @@ pub async fn webhook_handler(
     body: String,
 ) -> impl IntoResponse {
     let db = scheduler.get_db();
-    let path = uri.path().to_string();
+    let path = uri.path_and_query().map(|pq| pq.as_str().to_string()).unwrap_or_else(|| uri.path().to_string());
     let method_str = method.to_string();
     
     let mut headers_map = std::collections::HashMap::new();
@@ -52,15 +52,22 @@ pub async fn events_handler(
     let status_rx = scheduler.subscribe_status();
     let webhook_rx = scheduler.subscribe_webhooks();
     
-    let initial_msg = futures_util::stream::once(async {
-        Ok(Event::default().data("Log stream connected"))
-    });
+    let initial_msg = futures_util::stream::empty::<Result<Event, Infallible>>();
 
     let log_stream = tokio_stream::wrappers::BroadcastStream::new(log_rx)
         .map(|msg| {
             match msg {
-                Ok(text) => Ok(Event::default().event("log").data(text)),
-                Err(_) => Ok(Event::default().event("log").data("... (log buffer overflowed)")),
+                Ok(log_msg) => {
+                    let json = serde_json::json!({ 
+                        "log": log_msg.text,
+                        "task_id": log_msg.task_id
+                    }).to_string();
+                    Ok(Event::default().data(json))
+                },
+                Err(_) => {
+                    let json = serde_json::json!({ "log": "... (log buffer overflowed)" }).to_string();
+                    Ok(Event::default().data(json))
+                },
             }
         });
 
@@ -68,10 +75,13 @@ pub async fn events_handler(
         .map(|msg| {
             match msg {
                 Ok(status) => {
-                    let json = serde_json::to_string(&status).unwrap_or_default();
-                    Ok(Event::default().event("status").data(json))
+                    let json = serde_json::json!({ "status": status }).to_string();
+                    Ok(Event::default().data(json))
                 },
-                Err(_) => Ok(Event::default().event("log").data("... (status buffer overflowed)")),
+                Err(_) => {
+                    let json = serde_json::json!({ "log": "... (status buffer overflowed)" }).to_string();
+                    Ok(Event::default().data(json))
+                },
             }
         });
 
@@ -79,10 +89,13 @@ pub async fn events_handler(
         .map(|msg| {
             match msg {
                 Ok(webhook) => {
-                    let json = serde_json::to_string(&webhook).unwrap_or_default();
-                    Ok(Event::default().event("webhook").data(json))
+                    let json = serde_json::json!({ "webhook": webhook }).to_string();
+                    Ok(Event::default().data(json))
                 },
-                Err(_) => Ok(Event::default().event("log").data("... (webhook buffer overflowed)")),
+                Err(_) => {
+                    let json = serde_json::json!({ "log": "... (webhook buffer overflowed)" }).to_string();
+                    Ok(Event::default().data(json))
+                },
             }
         });
 
@@ -111,6 +124,7 @@ pub struct InitialLogs {
 
 #[derive(serde::Serialize)]
 pub struct LogEntry {
+    pub task_id: Option<Uuid>,
     pub output: String,
     pub created_at: String,
 }
@@ -126,7 +140,8 @@ pub async fn get_initial_logs_handler(
     let db = scheduler.get_db();
     match db.get_initial_logs(100).await {
         Ok(logs) => {
-            let entries = logs.into_iter().map(|(output, created_at)| LogEntry {
+            let entries = logs.into_iter().map(|(task_id, output, created_at)| LogEntry {
+                task_id,
                 output,
                 created_at,
             }).collect();
@@ -134,6 +149,32 @@ pub async fn get_initial_logs_handler(
         },
         Err(e) => {
             eprintln!("Failed to fetch initial logs: {}", e);
+            Err((StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response())
+        }
+    }
+}
+
+pub async fn get_run_logs_handler(
+    State(scheduler): State<Arc<Scheduler>>,
+    Path(log_id): Path<Uuid>,
+    session: Session,
+) -> Result<Json<InitialLogs>, impl IntoResponse> {
+    if session.get::<i64>(USER_SESSION_KEY).await.unwrap().is_none() {
+        return Err((StatusCode::UNAUTHORIZED, "Unauthorized").into_response());
+    }
+    
+    let db = scheduler.get_db();
+    match db.get_logs_by_id(log_id).await {
+        Ok(logs) => {
+            let entries = logs.into_iter().map(|(task_id, output, created_at)| LogEntry {
+                task_id,
+                output,
+                created_at,
+            }).collect();
+            Ok(Json(InitialLogs { logs: entries }))
+        },
+        Err(e) => {
+            eprintln!("Failed to fetch run logs {}: {}", log_id, e);
             Err((StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response())
         }
     }
@@ -156,6 +197,21 @@ pub async fn toggle_task_handler(
 
     scheduler.set_task_enabled(task_id, payload.enabled).await;
     StatusCode::OK.into_response()
+}
+
+pub async fn run_task_handler(
+    State(scheduler): State<Arc<Scheduler>>,
+    Path(task_id): Path<Uuid>,
+    session: Session,
+) -> impl IntoResponse {
+    if session.get::<i64>(USER_SESSION_KEY).await.unwrap().is_none() {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+    }
+
+    match scheduler.run_task_immediately(task_id).await {
+        Ok(_) => StatusCode::OK.into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
+    }
 }
 
 pub async fn reload_config_handler(
@@ -189,15 +245,25 @@ pub async fn status_page_handler(
             "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800" 
         };
         let mut status_text = if task.enabled { "Active" } else { "Paused" };
+        let mut status_onclick = String::new();
 
         if task.enabled && task.last_failed {
-            status_class = "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800";
+            status_class = "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/40";
             status_text = "Failed";
+            if let Some(log_id) = task.last_log_id {
+                status_onclick = format!("onclick='showTaskLogs(\"{}\")'", log_id);
+            }
         }
 
         let last_run = format_relative_time(&task.last_run);
         let duration = task.last_duration_ms.map(|ms| format!("<span class='ml-1 text-xs text-blue-600 dark:text-blue-400 font-bold'>({}ms)</span>", ms)).unwrap_or_default();
         
+        let run_btn = if task.enabled {
+            format!("<button class='px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-600 hover:text-white dark:bg-blue-900/20 dark:border-blue-800 dark:hover:bg-blue-600 transition-colors mr-2' onclick='runTask(\"{}\")'>Run</button>", task.id)
+        } else {
+            String::new()
+        };
+
         let toggle_btn = if task.enabled {
             format!("<button class='px-3 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-600 hover:text-white dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-600 transition-colors' onclick='toggleTask(\"{}\", false)'>Disable</button>", task.id)
         } else {
@@ -206,14 +272,15 @@ pub async fn status_page_handler(
 
         rows.push_str(&format!(
             "<tr class='border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors'>
-                <td class='px-4 py-3 align-middle text-sm font-bold text-gray-900 dark:text-slate-100'>{name}</td>
+                <td class='px-4 py-3 align-middle text-sm font-bold text-gray-900 dark:text-slate-100 cursor-pointer hover:text-blue-600 dark:hover:text-blue-400' onclick='filterTask(\"{id}\")'>{name}</td>
                 <td class='px-4 py-3 align-middle text-xs'><span class='bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 px-2 py-1 rounded font-medium uppercase tracking-wider'>{t_type}</span></td>
                 <td class='px-4 py-3 align-middle font-mono text-blue-600 dark:text-blue-400 text-xs'>{cron}</td>
                 <td class='px-4 py-3 align-middle text-gray-600 dark:text-slate-400 text-sm'>{tz}</td>
                 <td class='px-4 py-3 align-middle text-sm text-gray-500 dark:text-slate-500' title='{raw_run}'>{last} {dur}</td>
-                <td class='px-4 py-3 align-middle'><span class='px-2 py-1 text-[10px] uppercase font-bold rounded-full border {s_class}'>{s_text}</span></td>
-                <td class='px-4 py-3 align-middle'>{btn}</td>
+                <td class='px-4 py-3 align-middle'><span class='px-2 py-1 text-[10px] uppercase font-bold rounded-full border {s_class}' {s_onclick}>{s_text}</span></td>
+                <td class='px-4 py-3 align-middle'>{run_btn}{btn}</td>
             </tr>",
+            id = task.id,
             name = task.name,
             t_type = task.task_type,
             cron = task.cron,
@@ -222,7 +289,9 @@ pub async fn status_page_handler(
             raw_run = task.last_run.as_deref().unwrap_or("Never"),
             dur = duration,
             s_class = status_class,
+            s_onclick = status_onclick,
             s_text = status_text,
+            run_btn = run_btn,
             btn = toggle_btn
         ));
     }
@@ -301,7 +370,10 @@ pub async fn webhook_status_page_handler(
                 <td class='px-4 py-3 align-middle text-sm font-mono text-gray-900 dark:text-slate-100'>{path}</td>
                 <td class='px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400'>{from}</td>
                 <td class='px-4 py-3 align-middle'>
-                    <button class='px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-600 hover:text-white dark:bg-blue-900/20 dark:border-blue-800 dark:hover:bg-blue-600 transition-colors' onclick='showDetails({id})'>View Details</button>
+                    <div class='flex items-center gap-2'>
+                        <button class='px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-600 hover:text-white dark:bg-blue-900/20 dark:border-blue-800 dark:hover:bg-blue-600 transition-colors' onclick='showDetails({id})'>Details</button>
+                        <button class='px-3 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-600 hover:text-white dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-600 transition-colors' onclick='deleteWebhook({id})'>Delete</button>
+                    </div>
                 </td>
             </tr>",
             id = webhook.id,
@@ -414,4 +486,20 @@ fn format_relative_time(last_run_rfc3339: &Option<String>) -> String {
     }
 
     format!("{} seconds ago", duration.num_seconds())
+}
+
+pub async fn delete_webhook_handler(
+    State(scheduler): State<Arc<Scheduler>>,
+    Path(id): Path<i64>,
+    session: Session,
+) -> impl IntoResponse {
+    if session.get::<i64>(USER_SESSION_KEY).await.unwrap().is_none() {
+        return (StatusCode::UNAUTHORIZED, "Unauthorized").into_response();
+    }
+
+    let db = scheduler.get_db();
+    match db.delete_webhook(id).await {
+        Ok(_) => StatusCode::OK.into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete webhook: {}", e)).into_response(),
+    }
 }

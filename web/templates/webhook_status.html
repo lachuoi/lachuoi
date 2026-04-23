@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webhook Logs - La Chuoi</title>
+    <title>Webhook Monitor - La Chuoi</title>
     <link rel="apple-touch-icon" sizes="180x180" href="/static/assets/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/assets/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/assets/favicon-16x16.png">
@@ -104,9 +104,9 @@
                 <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h2m3 0h2a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
                 <span class="nav-text whitespace-nowrap">Tasks Status</span>
             </a>
-            <a href="/webhook-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold transition-all group" title="Webhook Logs">
+            <a href="/webhook-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold transition-all group" title="Webhook Monitor">
                 <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                <span class="nav-text whitespace-nowrap">Webhook Status</span>
+                <span class="nav-text whitespace-nowrap">Webhook Monitor</span>
             </a>
         </nav>
 
@@ -127,7 +127,7 @@
         <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 h-20 flex items-center justify-center">
             <div id="header-container" class="w-full px-8 flex items-center justify-between transition-all duration-300">
                 <div>
-                    <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Webhook Logs</h1>
+                    <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Webhook Monitor</h1>
                 </div>
 
                 <div class="flex items-center gap-3">
@@ -289,6 +289,25 @@
 
         function closeModal() {
             document.getElementById('modal').classList.remove('active');
+        }
+
+        async function deleteWebhook(id) {
+            if (!confirm('Are you sure you want to delete this webhook log?')) return;
+            
+            try {
+                const response = await fetch(`/webhooks/${id}`, {
+                    method: 'DELETE',
+                });
+                if (response.ok) {
+                    const row = document.getElementById(`row-${id}`);
+                    if (row) row.remove();
+                } else {
+                    alert('Failed to delete webhook');
+                }
+            } catch (error) {
+                console.error('Error deleting webhook:', error);
+                alert('Error deleting webhook');
+            }
         }
 
         // Close on escape

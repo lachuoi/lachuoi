@@ -3,7 +3,7 @@ use chrono_tz::Tz;
 use sha2::{Sha256, Digest};
 use std::io::BufReader;
 
-use crate::task::ScheduledTask;
+use crate::task::{ScheduledTask, LogMessage};
 use crate::db::Db;
 use crate::wasm_handlers;
 
@@ -17,7 +17,7 @@ use chrono::{Utc, DateTime};
 use std::pin::Pin;
 use std::future::Future;
 // Type alias for task handlers - functions that execute when a task runs
-type TaskHandler = Arc<dyn Fn(Uuid, Db, tokio::sync::broadcast::Sender<String>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync>;
+type TaskHandler = Arc<dyn Fn(Uuid, Uuid, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync>;
 
 pub struct Scheduler {
     tasks: Arc<RwLock<HashMap<Uuid, ScheduledTask>>>,
@@ -27,7 +27,7 @@ pub struct Scheduler {
     db: Db,
     wasm_engine: Engine,
     plugins_dir: std::path::PathBuf,
-    log_sender: tokio::sync::broadcast::Sender<String>,
+    log_sender: tokio::sync::broadcast::Sender<LogMessage>,
     status_sender: tokio::sync::broadcast::Sender<Vec<crate::task::TaskStatus>>,
     webhook_sender: tokio::sync::broadcast::Sender<crate::db::WebhookLog>,
 }
@@ -66,7 +66,7 @@ impl Scheduler {
         self.sync_with_config(&config).await
     }
 
-    pub fn subscribe_logs(&self) -> tokio::sync::broadcast::Receiver<String> {
+    pub fn subscribe_logs(&self) -> tokio::sync::broadcast::Receiver<LogMessage> {
         self.log_sender.subscribe()
     }
 
@@ -121,6 +121,7 @@ impl Scheduler {
                 last_duration_ms: t.last_duration,
                 last_failed: t.last_failed,
                 enabled: t.enabled,
+                last_log_id: t.last_log_id,
             })
             .collect()
     }
@@ -174,7 +175,7 @@ impl Scheduler {
                     if let Some(id) = existing_tasks.get(&task_cfg.name) {
                         if let Some(handler) = native_handlers.get(&task_cfg.name) {
                             let handler = Arc::clone(handler);
-                            self.register_handler(*id, move |log_id, db, log_sender| handler(log_id, db, log_sender)).await?;
+                            self.register_handler(*id, move |log_id, task_id, db, log_sender| handler(log_id, task_id, db, log_sender)).await?;
                         }
                     }
                 }
@@ -202,7 +203,7 @@ impl Scheduler {
                             .map_err(|e| format!("Failed to save task: {}", e))?;
 
                         self.tasks.write().await.insert(task_id, task);
-                        self.register_handler(task_id, move |log_id, db, log_sender| handler(log_id, db, log_sender)).await?;
+                        self.register_handler(task_id, move |log_id, task_id, db, log_sender| handler(log_id, task_id, db, log_sender)).await?;
                         println!("Updated native task '{}'", task_cfg.name);
                     } else {
                         println!("Warning: No native handler found for task '{}'", task_cfg.name);
@@ -249,6 +250,47 @@ impl Scheduler {
         Ok(())
     }
 
+    pub async fn sync_db_only(&self, config: &crate::config::AppConfig) -> Result<(), String> {
+        let db_tasks = self.db.get_tasks().await
+            .map_err(|e| format!("Failed to get tasks from DB: {}", e))?;
+        
+        let mut existing_info = HashMap::new();
+        for (id, name, _, _, _, _, _, _, _, enabled) in db_tasks {
+            existing_info.insert(name, (id, enabled));
+        }
+
+        let mut config_names = std::collections::HashSet::new();
+
+        for task_cfg in &config.tasks {
+            config_names.insert(task_cfg.name.clone());
+            let (task_id, enabled) = existing_info.get(&task_cfg.name)
+                .cloned()
+                .unwrap_or_else(|| (Uuid::new_v4(), true));
+            
+            self.db.save_task(
+                task_id, 
+                &task_cfg.name, 
+                &task_cfg.cron, 
+                &task_cfg.timezone, 
+                &task_cfg.task_type, 
+                task_cfg.payload.as_deref(), 
+                task_cfg.args.clone(), 
+                task_cfg.env.clone(), 
+                task_cfg.sha256.as_deref(), 
+                enabled
+            ).await.map_err(|e| format!("Failed to save task to DB: {}", e))?;
+        }
+
+        // Remove tasks from DB not in config
+        for (name, (id, _)) in existing_info {
+            if !config_names.contains(&name) {
+                self.db.remove_task(id).await.map_err(|e| format!("Failed to remove task from DB: {}", e))?;
+            }
+        }
+
+        Ok(())
+    }
+
     // Load tasks from the database
     pub async fn load_tasks(&self) -> Result<Vec<(Uuid, String, String)>, String> {
         let db_tasks = self.db.get_tasks().await
@@ -259,6 +301,7 @@ impl Scheduler {
             .unwrap_or_default();
 
         let mut tasks = self.tasks.write().await;
+        let native_handlers = self.native_handlers.read().await;
         let mut loaded = Vec::new();
         for (id, name, cron_expr, timezone_str, task_type, payload, args, env, sha256, enabled) in db_tasks {
             let timezone = timezone_str.parse::<Tz>()
@@ -267,11 +310,12 @@ impl Scheduler {
             match ScheduledTask::from_db(id, name.clone(), cron_expr, timezone, task_type.clone(), payload.clone(), args.clone(), env.clone(), sha256.clone(), enabled) {
                 Ok(mut task) => {
                     // Apply historical state
-                    if let Some((run_at_str, duration_ms)) = latest_logs.get(&id) {
+                    if let Some((log_id, run_at_str, duration_ms)) = latest_logs.get(&id) {
                         if let Ok(run_at) = DateTime::parse_from_rfc3339(run_at_str) {
                             task.last_run = Some(run_at.with_timezone(&task.timezone));
                         }
                         task.last_duration = duration_ms.map(|d| d as u64);
+                        task.last_log_id = Some(*log_id);
                     }
 
                     tasks.insert(id, task);
@@ -281,6 +325,11 @@ impl Scheduler {
                     if task_type == "wasm" {
                         if let Some(path) = payload {
                             self.register_wasm_handler(id, path, name.clone(), args, env, sha256).await?;
+                        }
+                    } else if task_type == "native" {
+                        if let Some(handler) = native_handlers.get(&name) {
+                            let handler = Arc::clone(handler);
+                            self.register_handler(id, move |log_id, task_id, db, log_sender| handler(log_id, task_id, db, log_sender)).await?;
                         }
                     }
                 }
@@ -335,7 +384,7 @@ impl Scheduler {
 
         let path_for_error = wasm_path.clone();
 
-        let handler = move |log_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<String>| {
+        let handler = move |log_id: Uuid, task_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<LogMessage>| {
             let engine = engine.clone();
             let name = task_name.clone();
             let args = args.clone();
@@ -345,7 +394,7 @@ impl Scheduler {
 
             Box::pin(async move {
                 let resolved_args = wasm_handlers::resolve_args(args).await;
-                if let Err(e) = wasm_handlers::run_wasm_binary(&engine, &binary, &err_path, &name, log_sender, resolved_args, env, log_id, db).await {
+                if let Err(e) = wasm_handlers::run_wasm_binary(&engine, &binary, &err_path, &name, log_sender, resolved_args, env, log_id, db, task_id).await {
                     let err_msg = format!("Error executing WASM task: {}", e);
                     eprintln!("{}", err_msg);
                     Err(err_msg)
@@ -365,13 +414,13 @@ impl Scheduler {
     // Register a handler for a specific task ID
     pub async fn register_handler<F, Fut>(&self, task_id: Uuid, handler: F) -> Result<(), String>
     where
-        F: Fn(Uuid, Db, tokio::sync::broadcast::Sender<String>) -> Fut + Send + Sync + 'static,
+        F: Fn(Uuid, Uuid, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<(), String>> + Send + 'static,
     {
         let handler = Arc::new(handler);
-        let wrapped_handler = move |log_id, db, log_sender| {
+        let wrapped_handler = move |log_id, task_id, db, log_sender| {
             let h = Arc::clone(&handler);
-            Box::pin(async move { h(log_id, db, log_sender).await }) as Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
+            Box::pin(async move { h(log_id, task_id, db, log_sender).await }) as Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
         };
 
         self.handlers
@@ -390,7 +439,7 @@ impl Scheduler {
         handler: F,
     ) -> Result<Uuid, String>
     where
-        F: Fn(Uuid, Db, tokio::sync::broadcast::Sender<String>) -> Fut + Send + Sync + 'static,
+        F: Fn(Uuid, Uuid, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<(), String>> + Send + 'static,
     {
         let task = ScheduledTask::new(name, cron_expr, timezone)?;
@@ -450,6 +499,67 @@ impl Scheduler {
             task.enabled = enabled;
             self.broadcast_status().await;
         }
+    }
+
+    pub async fn run_task_immediately(self: Arc<Self>, task_id: Uuid) -> Result<(), String> {
+        let (task_name, is_enabled) = {
+            let tasks = self.tasks.read().await;
+            let task = tasks.get(&task_id).ok_or_else(|| "Task not found".to_string())?;
+            (task.name.clone(), task.enabled)
+        };
+
+        if !is_enabled {
+            return Err("Cannot run a disabled task".to_string());
+        }
+
+        let handlers = self.handlers.read().await;
+        let handler = handlers.get(&task_id).ok_or_else(|| "Handler not found".to_string())?;
+        let handler = Arc::clone(handler);
+
+        let db = self.db.clone();
+        let tasks_ref = Arc::clone(&self.tasks);
+        let log_sender = self.log_sender.clone();
+        let self_arc = Arc::clone(&self);
+
+        tokio::spawn(async move {
+            if let Ok(log_id) = db.log_execution_start(task_id).await {
+                let start = std::time::Instant::now();
+                let start_msg = format!("[{}] Manually starting task...", task_name);
+                println!("{}", start_msg);
+                let _ = db.save_log_line(log_id, &task_name, "Manually starting task...").await;
+                let _ = log_sender.send(LogMessage { task_id, text: start_msg });
+                
+                let result = handler(log_id, task_id, db.clone(), log_sender.clone()).await;
+                let is_failed = result.is_err();
+                
+                if let Err(e) = &result {
+                    let err_msg = format!("[{}] Task failed: {}", task_name, e);
+                    println!("{}", err_msg);
+                    let _ = db.save_log_line(log_id, &task_name, &format!("Task failed: {}", e)).await;
+                    let _ = log_sender.send(LogMessage { task_id, text: err_msg });
+                }
+                
+                let duration_ms = start.elapsed().as_millis() as u64;
+                let finish_msg = format!("[{}] Task finished in {}ms", task_name, duration_ms);
+                println!("{}", finish_msg);
+                let _ = db.save_log_line(log_id, &task_name, &format!("Task finished in {}ms", duration_ms)).await;
+                let _ = log_sender.send(LogMessage { task_id, text: finish_msg });
+                
+                let _ = db.log_execution_finish(log_id, duration_ms).await;
+                
+                {
+                    let mut tasks = tasks_ref.write().await;
+                    if let Some(task) = tasks.get_mut(&task_id) {
+                        task.last_duration = Some(duration_ms);
+                        task.last_failed = is_failed;
+                        task.last_log_id = Some(log_id);
+                    }
+                }
+                self_arc.broadcast_status().await;
+            }
+        });
+
+        Ok(())
     }
 
     pub async fn broadcast_status(&self) {
@@ -534,23 +644,23 @@ impl Scheduler {
                         let start_msg = format!("[{}] Starting task...", name);
                         println!("{}", start_msg);
                         let _ = db.save_log_line(log_id, &name, "Starting task...").await;
-                        let _ = log_sender.send(start_msg);
+                        let _ = log_sender.send(LogMessage { task_id, text: start_msg });
                         
-                        let result = handler(log_id, db.clone(), log_sender.clone()).await;
+                        let result = handler(log_id, task_id, db.clone(), log_sender.clone()).await;
                         let is_failed = result.is_err();
                         
                         if let Err(e) = &result {
                             let err_msg = format!("[{}] Task failed: {}", name, e);
                             println!("{}", err_msg);
                             let _ = db.save_log_line(log_id, &name, &format!("Task failed: {}", e)).await;
-                            let _ = log_sender.send(err_msg);
+                            let _ = log_sender.send(LogMessage { task_id, text: err_msg });
                         }
                         
                         let duration_ms = start.elapsed().as_millis() as u64;
                         let finish_msg = format!("[{}] Task finished in {}ms", name, duration_ms);
                         println!("{}", finish_msg);
                         let _ = db.save_log_line(log_id, &name, &format!("Task finished in {}ms", duration_ms)).await;
-                        let _ = log_sender.send(finish_msg);
+                        let _ = log_sender.send(LogMessage { task_id, text: finish_msg });
                         
                         let _ = db.log_execution_finish(log_id, duration_ms).await;
                         
@@ -560,6 +670,7 @@ impl Scheduler {
                             if let Some(task) = tasks.get_mut(&task_id) {
                                 task.last_duration = Some(duration_ms);
                                 task.last_failed = is_failed;
+                                task.last_log_id = Some(log_id);
                             }
                         }
                         // Broadcast update immediately

@@ -27,10 +27,13 @@ impl WasiHttpView for ComponentState {
     fn ctx(&mut self) -> &mut WasiHttpCtx { &mut self.http }
 }
 
+use crate::task::LogMessage;
+
 pub struct PrefixPipe {
     pub prefix: String,
     pub log_id: Uuid,
-    pub sender: tokio::sync::broadcast::Sender<String>,
+    pub task_id: Uuid,
+    pub sender: tokio::sync::broadcast::Sender<LogMessage>,
     pub db: Db,
     pub error_detected: Option<Arc<AtomicBool>>,
 }
@@ -46,7 +49,7 @@ impl wasmtime_wasi::HostOutputStream for PrefixPipe {
         for line in text.lines() {
             let msg = format!("[{}] {}", self.prefix, line);
             println!("{}", msg);
-            let _ = self.sender.send(msg.clone());
+            let _ = self.sender.send(LogMessage { task_id: self.task_id, text: msg.clone() });
             
             // Error detection
             let line_lower = line.to_lowercase();
@@ -82,6 +85,7 @@ impl wasmtime_wasi::StdoutStream for PrefixPipe {
         Box::new(PrefixPipe {
             prefix: self.prefix.clone(),
             log_id: self.log_id,
+            task_id: self.task_id,
             sender: self.sender.clone(),
             db: self.db.clone(),
             error_detected: self.error_detected.clone(),
@@ -99,16 +103,16 @@ pub async fn register_all(_scheduler: &Scheduler) {
     // similar to how native_handlers.rs works.
 }
 
-pub async fn run_wasm_binary(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn run_wasm_binary(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<LogMessage>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, db: Db, task_id: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Check if it's a WASM component (starts with \0asm and version 0x0d)
     if binary.starts_with(&[0, 0x61, 0x73, 0x6d, 0x0d, 0, 1, 0]) {
-        run_wasm_component(engine, binary, wasm_path, task_name, log_sender, args, env, log_id, db).await
+        run_wasm_component(engine, binary, wasm_path, task_name, log_sender, args, env, log_id, db, task_id).await
     } else {
-        run_wasm_module(engine, binary, wasm_path, task_name, log_sender, args, env, log_id, db).await
+        run_wasm_module(engine, binary, wasm_path, task_name, log_sender, args, env, log_id, db, task_id).await
     }
 }
 
-pub async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<LogMessage>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, db: Db, task_id: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let module = Module::from_binary(engine, binary)?;
 
     struct MyState {
@@ -124,6 +128,7 @@ pub async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, ta
     builder.stdout(PrefixPipe {
             prefix: task_name.to_string(),
             log_id,
+            task_id,
             sender: log_sender.clone(),
             db: db.clone(),
             error_detected: Some(Arc::clone(&error_detected)),
@@ -131,6 +136,7 @@ pub async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, ta
         .stderr(PrefixPipe {
             prefix: task_name.to_string(),
             log_id,
+            task_id,
             sender: log_sender,
             db,
             error_detected: Some(Arc::clone(&error_detected)),
@@ -165,7 +171,7 @@ pub async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, ta
     Ok(())
 }
 
-pub async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<String>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, db: Db) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, log_sender: tokio::sync::broadcast::Sender<LogMessage>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, db: Db, task_id: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let component = Component::from_binary(engine, binary)?;
 
     let mut linker = ComponentLinker::new(engine);
@@ -178,6 +184,7 @@ pub async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str,
     builder.stdout(PrefixPipe {
             prefix: task_name.to_string(),
             log_id,
+            task_id,
             sender: log_sender.clone(),
             db: db.clone(),
             error_detected: Some(Arc::clone(&error_detected)),
@@ -185,6 +192,7 @@ pub async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str,
         .stderr(PrefixPipe {
             prefix: task_name.to_string(),
             log_id,
+            task_id,
             sender: log_sender,
             db,
             error_detected: Some(Arc::clone(&error_detected)),

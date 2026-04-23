@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS lachuoi_logs (
     task_id TEXT NOT NULL,
     run_at DATETIME NOT NULL,
     duration_ms INTEGER,
-    FOREIGN KEY(task_id) REFERENCES lachuoi_tasks(id)
+    FOREIGN KEY(task_id) REFERENCES lachuoi_tasks(id) ON DELETE CASCADE
 );
 
 -- Task Output Logs Table
@@ -37,7 +37,7 @@ CREATE TABLE IF NOT EXISTS lachuoi_outputs (
     module TEXT NOT NULL,
     output TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(log_id) REFERENCES lachuoi_logs(id)
+    FOREIGN KEY(log_id) REFERENCES lachuoi_logs(id) ON DELETE CASCADE
 );
 
 -- Web Session Table
@@ -57,4 +57,11 @@ CREATE TABLE IF NOT EXISTS lachuoi_webhooks (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Kv_store Table
+CREATE TABLE `lachuoi_kv_store` (
+	`key` text PRIMARY KEY,
+	`value` text,
+	`created_at` numeric DEFAULT CURRENT_TIMESTAMP,
+	`updated_at` numeric DEFAULT CURRENT_TIMESTAMP
+);
 

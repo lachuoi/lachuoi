@@ -30,7 +30,7 @@ A high-performance, distributed WASI runtime and task management engine built wi
 
 - **Remote WASM**: Download WASM binaries directly from HTTPS URLs with mandatory verification.
 - **WASM Security**: Mandatory SHA256 checksum verification for all WASM binaries (local or remote).
-- **Persistent State**: Database-backed sessions, execution history, and webhook logs (Turso/libSQL).
+- **Persistent State**: Database-backed sessions, execution history, and Webhook Monitor (Turso/libSQL).
 - **Zero-Downtime Reloads**: Hot-reload `cron.toml` configuration without stopping the service.
 
 ---
@@ -132,7 +132,7 @@ Accessible at `http://localhost:9130` (default port).
 - **Sorting**: Click any column header to sort tasks.
 - **Controls**: Enable or disable tasks directly from the UI.
 - **Live Logs**: View the last 1000 lines of execution logs in the real-time console.
-- **Webhook Logs**: Track incoming webhook requests and payloads in the database.
+- **Webhook Monitor**: Track incoming webhook requests and payloads in the database.
 
 ---
 
