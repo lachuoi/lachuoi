@@ -7,6 +7,9 @@ use lachuoi::web::WebServer;
 async fn main() {
     dotenvy::dotenv().ok();
 
+    // Fix for rustls 0.23+ CryptoProvider panic
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let pid_file = ".scheduler.pid";
 
     let args: Vec<String> = std::env::args().collect();
@@ -100,7 +103,12 @@ async fn main() {
     });
 
     // 7. Start the web server (blocking)
-    let web_server = WebServer::new(Arc::clone(&scheduler), db.clone(), 9130);
+    let port = std::env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(9130);
+
+    let web_server = WebServer::new(Arc::clone(&scheduler), db.clone(), port);
     if let Err(e) = web_server.run().await {
         eprintln!("Web server error: {}", e);
     }

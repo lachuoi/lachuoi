@@ -1,14 +1,22 @@
-# Build the project (e.g., just build, just build -- --release)
+# Build both lachuoi and lachuoi-worker
 build flags="":
-    cargo build {{flags}}
+    cargo build {{ flags }}
 
-# Run the project (e.g., just run, just run -- --release, just run -- -- --reload)
-run flags="":
-    cargo run {{flags}}
+# Run the master (lachuoi)
+run-master flags="":
+    cargo run --bin lachuoi {{ flags }}
+
+# Run the worker (lachuoi-worker)
+run-worker flags="":
+    cargo run --bin lachuoi-worker {{ flags }}
+
+# Run both locally (needs LACHUOI_MASTER_WS_URL for worker)
+run-all:
+    just run-master & sleep 2 && just run-worker
 
 # Reload the configuration
 reload:
-    cargo run -- reload
+    cargo run --bin lachuoi -- reload
 
 # Initialize the database (local development)
 db-init:
@@ -37,3 +45,14 @@ test:
 clean:
     cargo clean
     rm -f .scheduler.pid
+
+tr:
+    just build --release
+    rsync -avhz cron.toml 1.c:~/app/lachuoi/
+    rsync -avhz web 1.c:~/app/lachuoi/
+    rsync -avhz plugins 1.c:~/app/lachuoi/
+    rsync -avhz target/release/lachuoi 1.c:~/app/lachuoi/
+    rsync -avhz target/release/lachuoi-worker 1.c:~/app/lachuoi/
+    rsync -avhz target/release/lachuoi-worker 3.o:~/apps/lachuoi/
+    rsync -avhz -e "ssh -q" target/release/lachuoi-worker freeshell.de:~/app/lachuoi/
+    rsync -avhz target/release/lachuoi-worker 0.z:~/app/lachuoi/

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker Nodes - La Chuoi</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/assets/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/assets/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/assets/favicon-16x16.png">
+    <link rel="shortcut icon" href="/static/assets/favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+        }
+    </script>
+    <script>
+        if (localStorage.getItem('color-theme') === 'dark' || (!('color-theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+            document.documentElement.classList.add('dark');
+        } else {
+            document.documentElement.classList.remove('dark');
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; transition: background-color 0.3s, color 0.3s; }
+        .font-mono { font-family: 'JetBrains Mono', monospace; }
+        .sidebar { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); position: relative; }
+        .sidebar-collapsed { width: 4rem !important; }
+        .sidebar-expanded { width: 16rem; }
+        .sidebar-resizer {
+            position: absolute;
+            top: 0;
+            right: -2px;
+            width: 4px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 60;
+            transition: background 0.2s;
+        }
+        .sidebar-resizer:hover { background: rgba(59, 130, 246, 0.5); }
+        .nav-text { transition: opacity 0.2s; overflow: hidden; }
+        .sidebar-collapsed .nav-text { opacity: 0; pointer-events: none; width: 0; }
+        .sidebar-collapsed .logo-text { display: none; }
+        .sidebar-collapsed .sidebar-header { justify-content: center; }
+        .sidebar-header-toggle svg { width: 14px; height: 14px; }
+        #sidebar-toggle svg { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .sidebar-collapsed #sidebar-toggle svg { transform: rotate(180deg); }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 min-h-screen text-slate-900 dark:text-slate-100 transition-colors duration-300 flex">
+    <!-- Sidebar -->
+    <aside id="sidebar" class="sidebar sidebar-expanded sticky top-0 h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col z-40">
+        <div id="sidebar-resizer" class="sidebar-resizer"></div>
+        <div class="sidebar-header p-4 flex items-center justify-between border-b border-slate-100 dark:border-slate-800 h-20">
+            <div class="sidebar-header-logo flex items-center gap-3 overflow-hidden">
+                <img src="/static/assets/favicon-32x32.png" class="w-8 h-8 rounded-lg" alt="LC">
+                <span class="logo-text font-extrabold text-lg tracking-tight whitespace-nowrap">La Chuoi</span>
+            </div>
+            <button id="sidebar-toggle" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
+            </button>
+        </div>
+
+        <nav class="flex-1 p-3 space-y-2 overflow-y-auto overflow-x-hidden">
+            <a href="/task-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-all group" title="Tasks Dashboard">
+                <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h2m3 0h2a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
+                <span class="nav-text whitespace-nowrap">Tasks Status</span>
+            </a>
+            <a href="/webhook-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-all group" title="Webhook Monitor">
+                <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                <span class="nav-text whitespace-nowrap">Webhook Monitor</span>
+            </a>
+            <a href="/workers" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold transition-all group" title="Worker Nodes">
+                <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                <span class="nav-text whitespace-nowrap">Worker Nodes</span>
+            </a>
+            <a href="/cluster-logs" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-all group" title="Cluster Logs">
+                <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="nav-text whitespace-nowrap">Cluster Logs</span>
+            </a>
+        </nav>
+
+        <div class="p-4 border-t border-slate-100 dark:border-slate-800">
+            <div class="user-profile-container flex items-center gap-3 overflow-hidden">
+                {{user_avatar}}
+                <div class="nav-text overflow-hidden">
+                    <p class="text-sm font-bold truncate">{{user}}</p>
+                    <a href="/logout" class="text-[10px] text-blue-600 dark:text-blue-400 hover:underline font-bold uppercase tracking-wider">Logout</a>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <div id="page-container" class="flex-1 min-w-0 flex flex-col transition-all duration-300">
+        <!-- Header -->
+        <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 h-20 flex items-center justify-center">
+            <div id="header-container" class="w-full px-8 flex items-center justify-between transition-all duration-300">
+                <div class="flex items-baseline gap-3">
+                    <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Worker Nodes</h1>
+                    <div id="status-indicator" class="text-xs font-bold text-slate-400 uppercase tracking-widest">Connecting...</div>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <button id="theme-toggle" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
+                        <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5 text-slate-800" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
+                        <svg id="theme-toggle-light-icon" class="hidden w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Scrollable Area -->
+        <main class="flex-1 overflow-y-auto p-8">
+            <div id="main-container" class="max-w-none mx-auto flex flex-col gap-8 transition-all duration-300">
+                <div class="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ID</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Hostname</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Address</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">CPU</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Memory</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-center">Disk</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Running Tasks</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="worker-table-body" class="divide-y divide-slate-100 dark:divide-slate-800">
+                                {{worker_rows}}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <footer class="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800 text-center text-slate-400 dark:text-slate-500 text-sm">
+                &copy; 2026 Seungjin Kim. Licensed under MIT or Apache 2.0.
+            </footer>
+        </main>
+    </div>
+
+    <script src="/static/js/app.js?v=18"></script>
+    <script>
+        // Theme toggle logic
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const darkIcon = document.getElementById('theme-toggle-dark-icon');
+        const lightIcon = document.getElementById('theme-toggle-light-icon');
+
+        if (document.documentElement.classList.contains('dark')) {
+            lightIcon.classList.remove('hidden');
+        } else {
+            darkIcon.classList.remove('hidden');
+        }
+
+        themeToggleBtn.addEventListener('click', function() {
+            darkIcon.classList.toggle('hidden');
+            lightIcon.classList.toggle('hidden');
+
+            if (localStorage.getItem('color-theme')) {
+                if (localStorage.getItem('color-theme') === 'light') {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                }
+            } else {
+                if (document.documentElement.classList.contains('dark')) {
+                    document.documentElement.classList.remove('dark');
+                    localStorage.setItem('color-theme', 'light');
+                } else {
+                    document.documentElement.classList.add('dark');
+                    localStorage.setItem('color-theme', 'dark');
+                }
+            }
+        });
+
+        // Sidebar logic
+        const sidebar = document.getElementById('sidebar');
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('sidebar-expanded');
+            sidebar.classList.toggle('sidebar-collapsed');
+            const isCollapsed = sidebar.classList.contains('sidebar-collapsed');
+            localStorage.setItem('sidebar-collapsed', isCollapsed);
+        });
+    </script>
+</body>
+</html>

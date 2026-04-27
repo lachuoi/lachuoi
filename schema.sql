@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS lachuoi_outputs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     log_id TEXT NOT NULL,
     module TEXT NOT NULL,
+    host TEXT,
     output TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY(log_id) REFERENCES lachuoi_logs(id) ON DELETE CASCADE
@@ -52,8 +53,20 @@ CREATE TABLE IF NOT EXISTS lachuoi_webhooks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     path TEXT NOT NULL,
     method TEXT NOT NULL,
+    remote_addr TEXT,
     headers TEXT,
     body TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Task Execution Events (WebSocket JSON-RPC logs)
+CREATE TABLE IF NOT EXISTS lachuoi_task_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    worker_id TEXT,
+    worker_hostname TEXT,
+    direction TEXT NOT NULL, -- 'master_to_worker' or 'worker_to_master'
+    method TEXT NOT NULL,
+    payload TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -64,4 +77,10 @@ CREATE TABLE `lachuoi_kv_store` (
 	`created_at` numeric DEFAULT CURRENT_TIMESTAMP,
 	`updated_at` numeric DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Migrations (for existing databases)
+-- Run these if you are upgrading from an older version
+-- ALTER TABLE lachuoi_webhooks ADD COLUMN remote_addr TEXT;
+-- ALTER TABLE lachuoi_outputs ADD COLUMN host TEXT;
+
 

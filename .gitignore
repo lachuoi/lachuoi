@@ -1,6 +1,7 @@
 /target
 .env
 /plugins
+cron.toml
 debug.log
 final.log
 output.log

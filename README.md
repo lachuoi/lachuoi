@@ -10,11 +10,13 @@ Project LACHUOI is named after the Vietnamese word *lá chuối*, meaning "banan
   <p><em>Modern, responsive dashboard featuring real-time task monitoring and controls.</em></p>
 </div>
 
-A high-performance, distributed WASI runtime and task management engine built with Rust. Beyond traditional **cron-based scheduling**, La Chuoi serves as a comprehensive **WASI runtime environment** capable of hosting web services, processing webhooks, and executing sandboxed components with full **WASI-HTTP** support.
+A high-performance, distributed WASI runtime and task management engine built with Rust. Beyond traditional **cron-based scheduling**, La Chuoi serves as a comprehensive **WASI runtime environment** capable of hosting web services, processing webhooks, and executing sandboxed components across a **distributed Master/Worker architecture**.
 
 ## 🚀 Key Features
 
-- **Hybrid Execution**: Run native Rust tasks or secure, sandboxed WASM components.
+- **Distributed Architecture**: Decouple task scheduling (Master) from task execution (Worker).
+- **WebSocket Communication**: Master and Workers communicate via persistent, real-time WebSocket connections.
+- **Hybrid Execution**: Run native Rust tasks on the Master or delegate secure, sandboxed WASM components to specialized Workers.
 - **Web Services & Webhooks**: Integrated support for receiving and processing webhooks, enabling event-driven task execution and web-based servicing.
 - **Universal WASI Runtime**: Full support for WASI Preview 1 and the modern Component Model (Preview 2).
 - **WASI-HTTP Support**: Sandboxed components can perform secure outbound HTTP requests and participate in web-based workflows.
@@ -95,15 +97,24 @@ sha256 = "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd328..."
 
 ## 🏃 Running the Application
 
-### Build and Run
+### 1. Start the Master (`lachuoi`)
+The master handles scheduling, the database, and the web dashboard.
 ```bash
-cargo run --release
+cargo run --release --bin lachuoi
+```
+
+### 2. Start the Worker (`lachuoi-worker`)
+The worker connects to the master and executes WASM tasks.
+```bash
+export LACHUOI_MASTER_WS_URL="wss://127.0.0.1/ws/worker"
+export LACHUOI_API_KEY="your_api_key"
+cargo run --release --bin lachuoi-worker
 ```
 
 ### Zero-Downtime Reload
-If you modify `cron.toml`, you can reload the configuration without restarting the service:
+If you modify `cron.toml`, you can reload the configuration without restarting the master:
 ```bash
-./lachuoi reload
+./target/release/lachuoi reload
 ```
 *This sends a SIGHUP signal to the main process via its PID file.*
 
@@ -111,16 +122,21 @@ If you modify `cron.toml`, you can reload the configuration without restarting t
 
 ## 🧩 Architecture
 
-### Native Handlers
-Native tasks are modularized in `src/native_handlers.rs`. These are compiled directly into the binary for performance-critical logic.
+### Master/Worker Model
+La Chuoi uses a **Master/Worker** architecture for scalability and isolation:
+- **Master**: Responsible for task scheduling, persistent state (SQLite), GitHub OAuth, and the Web Dashboard. It acts as a WebSocket server.
+- **Worker**: Lightweight instances that connect to the Master. They host the Wasmtime runtime and execute tasks on demand.
+- **Real-time Logging**: Workers stream task output back to the Master via WebSocket, which then broadcasts it to the Web Dashboard via SSE.
 
-### WASM Runtime & Services
-WASM tasks and services run in a strictly sandboxed environment using **Wasmtime**.
-- **SHA256 Check**: The scheduler verifies the binary hash before every execution.
+### Native Handlers (Master)
+Native tasks are modularized in `src/native_handlers.rs`. These are compiled directly into the Master binary for performance-critical or system-level logic.
+
+### WASM Runtime & Services (Worker)
+WASM tasks and services run in a strictly sandboxed environment using **Wasmtime** on the Worker nodes.
+- **SHA256 Check**: The Master verifies the binary hash before sending it to the Worker.
+- **WebSocket Delegation**: If one or more Workers are connected, the Master automatically delegates WASM tasks to them.
 - **WASI-HTTP**: Components can interact with external web services securely.
-- **Webhook Integration**: Inbound webhooks are logged and can be used to trigger specific task logic.
 - **Argument Resolution**: Supports dynamic argument injection (e.g., `file:~/.ssh/id_ed25519` or `env:VAR_NAME`).
-- **Standard Output**: Logs are captured via `PrefixPipe` and streamed to the UI in real-time.
 
 ---
 

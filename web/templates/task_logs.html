@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webhook Monitor - La Chuoi</title>
+    <title>Cluster Logs - La Chuoi</title>
     <link rel="apple-touch-icon" sizes="180x180" href="/static/assets/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="/static/assets/favicon-32x32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="/static/assets/favicon-16x16.png">
@@ -74,7 +74,7 @@
                 <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h2m3 0h2a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path></svg>
                 <span class="nav-text whitespace-nowrap">Tasks Status</span>
             </a>
-            <a href="/webhook-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold transition-all group" title="Webhook Monitor">
+            <a href="/webhook-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-all group" title="Webhook Monitor">
                 <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                 <span class="nav-text whitespace-nowrap">Webhook Monitor</span>
             </a>
@@ -82,7 +82,7 @@
                 <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
                 <span class="nav-text whitespace-nowrap">Worker Nodes</span>
             </a>
-            <a href="/cluster-logs" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-all group" title="Cluster Logs">
+            <a href="/cluster-logs" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold transition-all group" title="Cluster Logs">
                 <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                 <span class="nav-text whitespace-nowrap">Cluster Logs</span>
             </a>
@@ -104,12 +104,13 @@
         <!-- Header -->
         <header class="sticky top-0 z-30 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 h-20 flex items-center justify-center">
             <div id="header-container" class="w-full px-8 flex items-center justify-between transition-all duration-300">
-                <div>
-                    <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Webhook Monitor</h1>
+                <div class="flex items-baseline gap-3">
+                    <h1 class="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-white">Cluster Logs</h1>
+                    <div id="status-indicator" class="text-xs font-bold text-slate-400 uppercase tracking-widest">Connected</div>
                 </div>
 
                 <div class="flex items-center gap-3">
-                    <!-- Theme Toggle -->                    <button id="theme-toggle" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
+                    <button id="theme-toggle" class="p-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-all">
                         <svg id="theme-toggle-dark-icon" class="hidden w-5 h-5 text-slate-800" fill="currentColor" viewBox="0 0 20 20"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"></path></svg>
                         <svg id="theme-toggle-light-icon" class="hidden w-5 h-5 text-amber-500" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" fill-rule="evenodd" clip-rule="evenodd"></path></svg>
                     </button>
@@ -120,26 +121,28 @@
         <!-- Main Scrollable Area -->
         <main class="flex-1 overflow-y-auto p-8">
             <div id="main-container" class="max-w-none mx-auto flex flex-col gap-8 transition-all duration-300">
-                <div id="webhook-logs-container" class="w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
+                <div class="w-full bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden">
                     <div class="overflow-x-auto">
                         <table class="w-full text-left border-collapse">
-                        <thead>
-                            <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">ID</th>
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Time</th>
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Method</th>
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Path</th>
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Remote Addr</th>
-                                <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="webhook-table-body" class="divide-y divide-slate-100 dark:divide-slate-800">
-                            {{rows}}
-                        </tbody>
-                    </table>
+                            <thead>
+                                <tr class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800">
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Time</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Direction</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Worker</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Method</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Payload</th>
+                                    <th class="px-4 py-4 text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-right">Details</th>
+                                </tr>
+                            </thead>
+                            <tbody id="task-logs-table-body" class="divide-y divide-slate-100 dark:divide-slate-800">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="pagination" class="px-4 py-3 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                        <!-- Pagination controls -->
+                    </div>
                 </div>
-                {{pagination}}
-            </div>
             </div>
             
             <footer class="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800 text-center text-slate-400 dark:text-slate-500 text-sm">
@@ -152,150 +155,151 @@
     <div id="modal" class="modal fixed inset-0 z-50 items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
         <div class="bg-white dark:bg-slate-900 w-full max-w-4xl max-h-[90vh] rounded-2xl shadow-2xl flex flex-col border border-slate-200 dark:border-slate-800">
             <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                <h3 class="text-xl font-bold">Webhook Details</h3>
+                <h3 class="text-xl font-bold">Event Details</h3>
                 <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
-            <div class="p-6 overflow-y-auto space-y-6">
-                <div>
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Headers</h4>
-                    <pre id="modal-headers" class="p-4 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800 font-mono text-sm overflow-x-auto"></pre>
-                </div>
-                <div>
-                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Body</h4>
-                    <pre id="modal-body" class="p-4 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800 font-mono text-sm overflow-x-auto"></pre>
-                </div>
+            <div class="p-6 overflow-y-auto">
+                <pre id="modal-content" class="p-4 bg-slate-50 dark:bg-slate-950 rounded-lg border border-slate-200 dark:border-slate-800 font-mono text-sm overflow-x-auto"></pre>
             </div>
         </div>
     </div>
 
     <script>
-        // Sidebar Toggle & Resizing
+        // Sidebar & Theme Logic
         const sidebar = document.getElementById('sidebar');
         const sidebarToggle = document.getElementById('sidebar-toggle');
-        const sidebarLogo = document.querySelector('.sidebar-header-logo');
         const resizer = document.getElementById('sidebar-resizer');
+        const themeToggleBtn = document.getElementById('theme-toggle');
+        const darkIcon = document.getElementById('theme-toggle-dark-icon');
+        const lightIcon = document.getElementById('theme-toggle-light-icon');
 
-        // Load sidebar state
+        if (document.documentElement.classList.contains('dark')) lightIcon.classList.remove('hidden');
+        else darkIcon.classList.remove('hidden');
+
+        themeToggleBtn.addEventListener('click', () => {
+            darkIcon.classList.toggle('hidden');
+            lightIcon.classList.toggle('hidden');
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('color-theme', 'light');
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('color-theme', 'dark');
+            }
+        });
+
+        // Sidebar state
+        if (localStorage.getItem('sidebar-collapsed') === 'true') {
+            sidebar.classList.remove('sidebar-expanded');
+            sidebar.classList.add('sidebar-collapsed');
+        }
         const savedWidth = localStorage.getItem('sidebar-width');
         if (savedWidth && localStorage.getItem('sidebar-collapsed') !== 'true') {
             sidebar.style.width = savedWidth;
         }
 
-        if (localStorage.getItem('sidebar-collapsed') === 'true') {
-            sidebar.classList.remove('sidebar-expanded');
-            sidebar.classList.add('sidebar-collapsed');
+        sidebarToggle.addEventListener('click', () => {
+            sidebar.classList.toggle('sidebar-expanded');
+            sidebar.classList.toggle('sidebar-collapsed');
+            localStorage.setItem('sidebar-collapsed', sidebar.classList.contains('sidebar-collapsed'));
+        });
+
+        // Pagination and Fetching
+        let currentPage = 1;
+        const limit = 50;
+
+        async function fetchLogs(page = 1) {
+            currentPage = page;
+            try {
+                const response = await fetch(`/api/cluster-logs?page=${page}`);
+                const data = await response.json();
+                renderLogs(data.logs);
+                renderPagination(data.total_count, data.page, data.limit);
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+            }
         }
 
-        const toggleSidebar = () => {
-            const isCollapsed = sidebar.classList.contains('sidebar-collapsed');
-            if (isCollapsed) {
-                sidebar.classList.remove('sidebar-collapsed');
-                sidebar.classList.add('sidebar-expanded');
-                localStorage.setItem('sidebar-collapsed', 'false');
-                const savedWidth = localStorage.getItem('sidebar-width');
-                if (savedWidth) sidebar.style.width = savedWidth;
-            } else {
-                sidebar.classList.remove('sidebar-expanded');
-                sidebar.classList.add('sidebar-collapsed');
-                localStorage.setItem('sidebar-collapsed', 'true');
-                sidebar.style.width = ''; // Reset to CSS default for collapsed
+        function renderLogs(logs) {
+            const tbody = document.getElementById('task-logs-table-body');
+            tbody.innerHTML = logs.map(log => {
+                const directionLabel = log.direction === 'master_to_worker' 
+                    ? '<span class="px-2 py-1 text-[10px] uppercase font-bold rounded bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-900/20 dark:text-purple-400 dark:border-purple-800">Master → Worker</span>'
+                    : '<span class="px-2 py-1 text-[10px] uppercase font-bold rounded bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-400 dark:border-emerald-800">Worker → Master</span>';
+                
+                const methodLabel = `<span class="px-2 py-1 text-[10px] uppercase font-bold rounded bg-slate-100 text-slate-700 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700 font-mono">${log.method}</span>`;
+                
+                const payloadTruncated = log.payload.length > 100 ? log.payload.substring(0, 100) + '...' : log.payload;
+
+                return `
+                    <tr class="border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 align-middle text-sm text-gray-500 dark:text-slate-500 whitespace-nowrap">${log.created_at}</td>
+                        <td class="px-4 py-3 align-middle">${directionLabel}</td>
+                        <td class="px-4 py-3 align-middle text-sm font-bold text-gray-900 dark:text-slate-100">${log.worker_hostname || '-'} <br/> <span class="text-[10px] font-mono text-slate-500">${log.worker_id || ''}</span></td>
+                        <td class="px-4 py-3 align-middle">${methodLabel}</td>
+                        <td class="px-4 py-3 align-middle text-xs font-mono text-gray-600 dark:text-slate-400 max-w-xs truncate">${payloadTruncated}</td>
+                        <td class="px-4 py-3 align-middle text-right">
+                            <button onclick='showDetails(${JSON.stringify(log.payload).replace(/'/g, "&apos;")})' class="px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-600 hover:text-white dark:bg-blue-900/20 dark:border-blue-800 dark:hover:bg-blue-600 transition-colors">Details</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderPagination(total, page, limit) {
+            const container = document.getElementById('pagination');
+            const totalPages = Math.ceil(total / limit);
+            
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                return;
             }
+
+            let html = `
+                <div class="text-sm text-slate-500 dark:text-slate-400">
+                    Showing <span class="font-medium">${(page-1)*limit + 1}</span> to <span class="font-medium">${Math.min(page*limit, total)}</span> of <span class="font-medium">${total}</span> results
+                </div>
+                <div class="flex gap-2">
+            `;
+
+            if (page > 1) {
+                html += `<button onclick="fetchLogs(${page-1})" class="px-3 py-1 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">Previous</button>`;
+            }
+
+            if (page < totalPages) {
+                html += `<button onclick="fetchLogs(${page+1})" class="px-3 py-1 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800">Next</button>`;
+            }
+
+            html += `</div>`;
+            container.innerHTML = html;
+        }
+
+        window.showDetails = function(payload) {
+            try {
+                const obj = JSON.parse(payload);
+                document.getElementById('modal-content').textContent = JSON.stringify(obj, null, 2);
+            } catch (e) {
+                document.getElementById('modal-content').textContent = payload;
+            }
+            document.getElementById('modal').classList.add('active');
         };
 
-        sidebarToggle.addEventListener('click', toggleSidebar);
-        sidebarLogo.addEventListener('click', () => {
-            if (sidebar.classList.contains('sidebar-collapsed')) {
-                toggleSidebar();
-            }
-        });
-
-        // Resizing Logic
-        let isResizing = false;
-
-        resizer.addEventListener('mousedown', (e) => {
-            if (sidebar.classList.contains('sidebar-collapsed')) return;
-            isResizing = true;
-            sidebar.classList.add('resizing');
-            document.body.style.cursor = 'col-resize';
-            document.body.style.userSelect = 'none';
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isResizing) return;
-            let newWidth = e.clientX;
-            if (newWidth < 160) newWidth = 160; // Min width when expanded
-            if (newWidth > 600) newWidth = 600; // Max width
-            sidebar.style.width = `${newWidth}px`;
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (isResizing) {
-                isResizing = false;
-                sidebar.classList.remove('resizing');
-                document.body.style.cursor = '';
-                document.body.style.userSelect = '';
-                localStorage.setItem('sidebar-width', sidebar.style.width);
-            }
-        });
-
-        function showDetails(id) {
-            const row = document.getElementById(`row-${id}`);
-            const headers = row.dataset.headers;
-            const body = row.dataset.body;
-            
-            try {
-                const headersObj = JSON.parse(headers);
-                document.getElementById('modal-headers').textContent = JSON.stringify(headersObj, null, 2);
-            } catch (e) {
-                document.getElementById('modal-headers').textContent = headers;
-            }
-            
-            try {
-                const bodyObj = JSON.parse(body);
-                document.getElementById('modal-body').textContent = JSON.stringify(bodyObj, null, 2);
-            } catch (e) {
-                document.getElementById('modal-body').textContent = body;
-            }
-            
-            document.getElementById('modal').classList.add('active');
-        }
-
-        function closeModal() {
+        window.closeModal = function() {
             document.getElementById('modal').classList.remove('active');
-        }
+        };
 
-        async function deleteWebhook(id) {
-            if (!confirm('Are you sure you want to delete this webhook log?')) return;
-            
-            try {
-                const response = await fetch(`/webhooks/${id}`, {
-                    method: 'DELETE',
-                });
-                if (response.ok) {
-                    const row = document.getElementById(`row-${id}`);
-                    if (row) row.remove();
-                } else {
-                    alert('Failed to delete webhook');
-                }
-            } catch (error) {
-                console.error('Error deleting webhook:', error);
-                alert('Error deleting webhook');
-            }
-        }
+        // Initial fetch
+        fetchLogs();
 
         // Close on escape
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') closeModal();
         });
-
-        // Close on click outside
         document.getElementById('modal').addEventListener('click', (e) => {
             if (e.target === document.getElementById('modal')) closeModal();
         });
-
     </script>
-    <script src="/static/js/app.js?v=17"></script>
 </body>
 </html>

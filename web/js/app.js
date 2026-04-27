@@ -46,13 +46,146 @@
         });
 
         // --- SSE Setup ---
-        const eventSource = new EventSource('/events');
+        let eventSource;
+        let errorCount = 0;
+        let sseReconnectTimeout;
+
+        function setupEventSource() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource('/events');
+            
+            eventSource.onopen = () => {
+                errorCount = 0;
+                if (statusIndicator) {
+                    statusIndicator.innerText = 'Connected';
+                    statusIndicator.className = 'text-xs font-bold text-emerald-400';
+                }
+            };
+
+            eventSource.onerror = async (e) => {
+                errorCount++;
+                if (statusIndicator) {
+                    statusIndicator.innerText = 'Disconnected - retrying...';
+                    statusIndicator.className = 'text-xs font-bold text-red-400';
+                }
+
+                // If we keep failing, check if we're still logged in
+                if (errorCount > 3) {
+                    try {
+                        const resp = await fetch('/tasks');
+                        if (resp.status === 401) {
+                            window.location.href = '/';
+                            return;
+                        }
+                    } catch (err) {
+                        console.error("Session check failed:", err);
+                    }
+                }
+
+                // EventSource auto-reconnects, but we can add an extra layer if it gets stuck
+                if (errorCount > 10) {
+                    clearTimeout(sseReconnectTimeout);
+                    sseReconnectTimeout = setTimeout(setupEventSource, 5000);
+                }
+            };
+
+            eventSource.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.connected) return; // Initial handshake
+                    
+                    if (data.log) {
+                        const taskId = data.task_id;
+                        const host = data.host;
+                        const isError = data.log.toLowerCase().includes('failed') || data.log.toLowerCase().includes('error');
+                        saveLogToPersistentStorage(data.log, isError, taskId, host);
+
+                        if (logsDiv) {
+                            const entry = document.createElement('div');
+                            entry.className = 'mb-1 flex gap-3 text-xs md:text-sm log-entry';
+                            if (taskId) entry.setAttribute('data-task-id', taskId);
+                            
+                            // Apply filter if active
+                            if (activeTaskIdFilter && taskId !== activeTaskIdFilter) {
+                                entry.classList.add('hidden');
+                            }
+
+                            const textColor = isError ? 'text-red-400 font-medium' : 'text-slate-300';
+                            const time = new Date().toLocaleTimeString();
+                            const hostTag = host ? `<span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-slate-400 uppercase border border-slate-700 select-none">${host}</span>` : '';
+                            entry.innerHTML = `<span class="text-slate-500 shrink-0 font-medium select-none">[${time}]</span>${hostTag}<span class="${textColor}">${data.log}</span>`;
+                            logsDiv.appendChild(entry);
+                            
+                            if (!entry.classList.contains('hidden')) {
+                                logsDiv.scrollTop = logsDiv.scrollHeight;
+                            }
+                            pruneLogs();
+                        }
+                    } else if (data.status || data.tasks) {
+                        const statusData = data.status || data.tasks;
+                        latestTasks = statusData;
+                        localStorage.setItem('lachuoi-latest-tasks', JSON.stringify(statusData));
+                        renderTable();
+                    } else if (data.webhook) {
+                        // Update webhooks in localStorage
+                        let savedWebhooks = [];
+                        try {
+                            const existing = localStorage.getItem('lachuoi-latest-webhooks');
+                            if (existing) savedWebhooks = JSON.parse(existing);
+                        } catch(e) {}
+                        savedWebhooks.unshift(data.webhook);
+                        if (savedWebhooks.length > 15) savedWebhooks = savedWebhooks.slice(0, 15);
+                        localStorage.setItem('lachuoi-latest-webhooks', JSON.stringify(savedWebhooks));
+
+                        if (!webhookTableBody) return;
+                        
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const currentPage = parseInt(urlParams.get('page') || '1');
+                        if (currentPage !== 1) return;
+
+                        const webhook = data.webhook;
+                        
+                        const row = document.createElement('tr');
+                        row.id = `row-${webhook.id}`;
+                        row.className = 'border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors';
+                        row.setAttribute('data-headers', webhook.headers.replace(/'/g, '&apos;'));
+                        row.setAttribute('data-body', webhook.body.replace(/'/g, '&apos;'));
+                        
+                        row.innerHTML = `
+                            <td class='px-4 py-3 align-middle text-xs font-mono text-gray-500 dark:text-slate-500'>${webhook.id}</td>
+                            <td class='px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400'>${webhook.created_at}</td>
+                            <td class='px-4 py-3 align-middle'><span class='px-2 py-1 text-[10px] uppercase font-bold rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'>${webhook.method}</span></td>
+                            <td class='px-4 py-3 align-middle text-sm font-mono text-gray-900 dark:text-slate-100'>${webhook.path}</td>
+                            <td class='px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400'>${webhook.remote_addr || '-'}</td>
+                            <td class='px-4 py-3 align-middle'>
+                                <div class='flex items-center gap-2'>
+                                    <button class='px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-600 hover:text-white dark:bg-blue-900/20 dark:border-blue-800 dark:hover:bg-blue-600 transition-colors' onclick='showDetails(${webhook.id})'>Details</button>
+                                    <button class='px-3 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-600 hover:text-white dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-600 transition-colors' onclick='deleteWebhook(${webhook.id})'>Delete</button>
+                                </div>
+                            </td>
+                        `;
+                        webhookTableBody.insertBefore(row, webhookTableBody.firstChild);
+                        
+                        while (webhookTableBody.children.length > 15) {
+                            webhookTableBody.removeChild(webhookTableBody.lastChild);
+                        }
+                    } else if (data.workers) {
+                        renderWorkers(data.workers);
+                    }
+                } catch (e) {
+                    console.error("Error handling SSE message:", e);
+                }
+            };
+        }
+
+        setupEventSource();
 
         // --- Initial Logs ---
         async function fetchInitialLogs() {
             if (!logsDiv) return;
-            // If we already have persistent logs, we can skip fetching from DB or just append
-            // For now, let's load persistent logs first, then fetch initial if empty
             const saved = localStorage.getItem('lachuoi-persistent-logs');
             if (saved && JSON.parse(saved).length > 0) {
                 loadPersistentLogs();
@@ -80,13 +213,11 @@
                             timeStr = 'Recent';
                         }
 
-                        entry.innerHTML = `<span class="text-slate-500 shrink-0 font-medium select-none">[${timeStr}]</span><span class="${textColor}">${log.output}</span>`;
+                        const hostTag = log.host ? `<span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-slate-400 uppercase border border-slate-700 select-none">${log.host}</span>` : '';
+                        entry.innerHTML = `<span class="text-slate-500 shrink-0 font-medium select-none">[${timeStr}]</span>${hostTag}<span class="${textColor}">${log.output}</span>`;
                         logsDiv.appendChild(entry);
                     });
                     logsDiv.scrollTop = logsDiv.scrollHeight;
-                    setTimeout(() => {
-                        logsDiv.scrollTop = logsDiv.scrollHeight;
-                    }, 50);
                 }
             } catch (error) {
                 console.error('Error fetching initial logs:', error);
@@ -115,36 +246,37 @@
             if (targetLayout === 'split') {
                 mainContainer.classList.remove('flex-col', 'items-center');
                 mainContainer.classList.add('md:flex-row', 'items-start', 'w-full');
-                if (headerContainer) headerContainer.classList.remove('max-w-[80%]', 'mx-auto');
+                if (headerContainer) headerContainer.classList.remove('mx-auto');
                 if (tasksSection) {
-                    tasksSection.classList.remove('max-w-[80%]', 'w-full');
+                    tasksSection.classList.remove('w-full');
                     tasksSection.classList.add('md:flex-[6]', 'min-w-0');
                 }
                 if (logsSection) {
-                    logsSection.classList.remove('max-w-[80%]', 'w-full');
+                    logsSection.classList.remove('w-full');
                     logsSection.classList.add('md:flex-[4]', 'min-w-0');
                 }
                 if (pageContainer) {
                     pageContainer.classList.remove('max-w-6xl', 'md:max-w-[98%]');
-                    pageContainer.classList.add('md:max-w-[98%]');
+                    pageContainer.classList.add('w-full');
                 }
                 if (layoutHorizontalIcon) layoutHorizontalIcon.classList.add('hidden');
                 if (layoutVerticalIcon) layoutVerticalIcon.classList.remove('hidden');
                 if (logsDiv) logsDiv.style.height = 'calc(100vh - 250px)';
             } else {
-                mainContainer.classList.add('flex-col', 'items-center');
-                mainContainer.classList.remove('md:flex-row', 'items-start', 'w-full');
-                if (headerContainer) headerContainer.classList.add('max-w-[80%]', 'mx-auto');
+                mainContainer.classList.add('flex-col', 'items-center', 'w-full');
+                mainContainer.classList.remove('md:flex-row', 'items-start');
+                if (headerContainer) headerContainer.classList.add('mx-auto');
                 if (tasksSection) {
                     tasksSection.classList.remove('md:flex-[6]', 'md:w-2/3', 'min-w-0');
-                    tasksSection.classList.add('max-w-[80%]', 'w-full');
+                    tasksSection.classList.add('w-full');
                 }
                 if (logsSection) {
                     logsSection.classList.remove('md:flex-[4]', 'md:w-1/3', 'min-w-0');
-                    logsSection.classList.add('max-w-[80%]', 'w-full');
+                    logsSection.classList.add('w-full');
                 }
                 if (pageContainer) {
                     pageContainer.classList.remove('max-w-6xl', 'md:max-w-[98%]');
+                    pageContainer.classList.add('w-full');
                 }
                 if (layoutHorizontalIcon) layoutHorizontalIcon.classList.remove('hidden');
                 if (layoutVerticalIcon) layoutVerticalIcon.classList.add('hidden');
@@ -225,18 +357,36 @@
 
             let rows = '';
             sortedTasks.forEach(task => {
-                let statusClass = task.enabled 
-                    ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800' 
-                    : 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800';
-                let statusText = task.enabled ? 'Active' : 'Paused';
+                let statusClass = '';
+                let statusText = '';
                 let statusOnclick = '';
-                if (task.enabled && task.last_failed) {
-                    statusClass = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/40';
-                    statusText = 'Failed';
+
+                if (task.host) {
+                    // Task is currently running on a worker
+                    statusText = `Running on ${task.host}`;
+                    statusClass = 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800';
+                    if (task.last_log_id) {
+                        statusOnclick = `onclick='showTaskLogs("${task.last_log_id}")'`;
+                    }
+                } else {
+                    // Task is NOT currently running
+                    if (!task.enabled) {
+                        statusText = 'Paused';
+                        statusClass = 'bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
+                    } else {
+                        statusText = task.last_host ? `Idle (${task.last_host})` : 'Idle';
+                        statusClass = 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800';
+                        
+                        if (task.last_failed) {
+                            statusText = task.last_host ? `Failed (${task.last_host})` : 'Failed';
+                            statusClass = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/40';
+                        }
+                    }
                     if (task.last_log_id) {
                         statusOnclick = `onclick='showTaskLogs("${task.last_log_id}")'`;
                     }
                 }
+
                 const lastRunStr = formatRelativeTime(task.last_run);
                 const durationStr = (task.last_duration_ms !== null && task.last_duration_ms !== undefined) 
                     ? `<span class='ml-1 text-xs text-blue-600 dark:text-blue-400 font-bold'>(${task.last_duration_ms}ms)</span>` 
@@ -262,7 +412,7 @@
                     </tr>
                 `;
             });
-            tableBody.innerHTML = rows;
+            if (tableBody) tableBody.innerHTML = rows;
             updateSortIndicators();
         }
 
@@ -276,7 +426,7 @@
             if (diffSeconds < 60) return `${diffSeconds}s ago`;
             if (diffSeconds < 3600) return `${Math.floor(diffSeconds / 60)}m ago`;
             if (diffSeconds < 86400) return `${Math.floor(diffSeconds / 3600)}h ago`;
-            return lastRun.toLocaleTimeString();
+            return lastRun.toLocaleDateString() + ' ' + lastRun.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         }
 
         function pruneLogs() {
@@ -286,19 +436,19 @@
             }
         }
 
-        function saveLogToPersistentStorage(logText, isError, taskId) {
+        function saveLogToPersistentStorage(logText, isError, taskId, host) {
             try {
                 let persistentLogs = [];
                 const saved = localStorage.getItem('lachuoi-persistent-logs');
                 if (saved) persistentLogs = JSON.parse(saved);
-                
+
                 persistentLogs.push({
                     text: logText,
                     isError: isError,
                     taskId: taskId,
+                    host: host,
                     time: new Date().toISOString()
-                });
-                
+                });                
                 // Keep last 200 logs in persistent storage
                 if (persistentLogs.length > 200) {
                     persistentLogs = persistentLogs.slice(-200);
@@ -320,103 +470,75 @@
                         if (log.taskId) entry.setAttribute('data-task-id', log.taskId);
                         const textColor = log.isError ? 'text-red-400 font-medium' : 'text-slate-300';
                         const timeStr = new Date(log.time).toLocaleTimeString();
-                        entry.innerHTML = `<span class="text-slate-500 shrink-0 font-medium select-none">[${timeStr}]</span><span class="${textColor}">${log.text}</span>`;
+                        const hostTag = log.host ? `<span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-slate-400 uppercase border border-slate-700 select-none">${log.host}</span>` : '';
+                        entry.innerHTML = `<span class="text-slate-500 shrink-0 font-medium select-none">[${timeStr}]</span>${hostTag}<span class="${textColor}">${log.text}</span>`;
                         logsDiv.appendChild(entry);
                     });
                     logsDiv.scrollTop = logsDiv.scrollHeight;
-                    // Double check with a small timeout to ensure layout is complete
-                    setTimeout(() => {
-                        logsDiv.scrollTop = logsDiv.scrollHeight;
-                    }, 50);
                 }
             } catch (e) { console.error("Error loading logs from localStorage:", e); }
         }
 
         let activeTaskIdFilter = null;
 
-        eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
+        function renderWorkers(workers) {
+            const workersTableBody = document.getElementById('worker-table-body');
+            if (!workersTableBody) return;
+            
+            let rows = '';
+            workers.forEach(worker => {
+                const runningTasks = worker.running_tasks.length === 0
+                    ? "<span class='text-slate-400 italic'>None</span>"
+                    : worker.running_tasks.map(t => `<span class='px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-md text-xs font-bold'>${t}</span>`).join(' ');
+
+                const cpu = worker.metrics ? `${worker.metrics.cpu_usage.toFixed(1)}%` : '-';
+                const mem = worker.metrics ? `${(worker.metrics.memory_used / 1024 / 1024 / 1024).toFixed(1)}GB / ${(worker.metrics.memory_total / 1024 / 1024 / 1024).toFixed(1)}GB` : '-';
+                const disk = worker.metrics ? `${(worker.metrics.disk_used / 1024 / 1024 / 1024).toFixed(0)}GB / ${(worker.metrics.disk_total / 1024 / 1024 / 1024).toFixed(0)}GB` : '-';
                 
-                if (data.log) {
-                    const taskId = data.task_id;
-                    const isError = data.log.toLowerCase().includes('failed') || data.log.toLowerCase().includes('error');
-                    saveLogToPersistentStorage(data.log, isError, taskId);
+                const memPercent = worker.metrics ? (worker.metrics.memory_used / worker.metrics.memory_total * 100).toFixed(0) : 0;
+                const diskPercent = worker.metrics ? (worker.metrics.disk_used / worker.metrics.disk_total * 100).toFixed(0) : 0;
 
-                    if (logsDiv) {
-                        const entry = document.createElement('div');
-                        entry.className = 'mb-1 flex gap-3 text-xs md:text-sm log-entry';
-                        if (taskId) entry.setAttribute('data-task-id', taskId);
-                        
-                        // Apply filter if active
-                        if (activeTaskIdFilter && taskId !== activeTaskIdFilter) {
-                            entry.classList.add('hidden');
-                        }
-
-                        const textColor = isError ? 'text-red-400 font-medium' : 'text-slate-300';
-                        const time = new Date().toLocaleTimeString();
-                        entry.innerHTML = `<span class="text-slate-500 shrink-0 font-medium select-none">[${time}]</span><span class="${textColor}">${data.log}</span>`;
-                        logsDiv.appendChild(entry);
-                        
-                        if (!entry.classList.contains('hidden')) {
-                            logsDiv.scrollTop = logsDiv.scrollHeight;
-                        }
-                        pruneLogs();
-                    }
-                } else if (data.status) {
-                    latestTasks = data.status;
-                    localStorage.setItem('lachuoi-latest-tasks', JSON.stringify(data.status));
-                    renderTable();
-                } else if (data.webhook) {
-                    // Update webhooks in localStorage
-                    let savedWebhooks = [];
-                    try {
-                        const existing = localStorage.getItem('lachuoi-latest-webhooks');
-                        if (existing) savedWebhooks = JSON.parse(existing);
-                    } catch(e) {}
-                    savedWebhooks.unshift(data.webhook);
-                    if (savedWebhooks.length > 15) savedWebhooks = savedWebhooks.slice(0, 15);
-                    localStorage.setItem('lachuoi-latest-webhooks', JSON.stringify(savedWebhooks));
-
-                    if (!webhookTableBody) return;
-                    
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const currentPage = parseInt(urlParams.get('page') || '1');
-                    if (currentPage !== 1) return;
-
-                    const webhook = data.webhook;
-                    const headers = JSON.parse(webhook.headers);
-                    const fromAddress = headers['x-forwarded-for'] || '-';
-                    
-                    const row = document.createElement('tr');
-                    row.id = `row-${webhook.id}`;
-                    row.className = 'border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors';
-                    row.setAttribute('data-headers', webhook.headers.replace(/'/g, '&apos;'));
-                    row.setAttribute('data-body', webhook.body.replace(/'/g, '&apos;'));
-                    
-                    row.innerHTML = `
-                        <td class='px-4 py-3 align-middle text-xs font-mono text-gray-500 dark:text-slate-500'>${webhook.id}</td>
-                        <td class='px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400'>${webhook.created_at}</td>
-                        <td class='px-4 py-3 align-middle'><span class='px-2 py-1 text-[10px] uppercase font-bold rounded bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800'>${webhook.method}</span></td>
-                        <td class='px-4 py-3 align-middle text-sm font-mono text-gray-900 dark:text-slate-100'>${webhook.path}</td>
-                        <td class='px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400'>${fromAddress}</td>
-                        <td class='px-4 py-3 align-middle'>
-                            <div class='flex items-center gap-2'>
-                                <button class='px-3 py-1 text-xs font-semibold text-blue-600 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-600 hover:text-white dark:bg-blue-900/20 dark:border-blue-800 dark:hover:bg-blue-600 transition-colors' onclick='showDetails(${webhook.id})'>Details</button>
-                                <button class='px-3 py-1 text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-md hover:bg-red-600 hover:text-white dark:bg-red-900/20 dark:border-red-800 dark:hover:bg-red-600 transition-colors' onclick='deleteWebhook(${webhook.id})'>Delete</button>
+                rows += `
+                    <tr class="border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
+                        <td class="px-4 py-3 align-middle text-xs font-mono text-slate-500 dark:text-slate-500 truncate max-w-[100px]" title="${worker.id}">${worker.id}</td>
+                        <td class="px-4 py-3 align-middle text-sm font-bold text-gray-900 dark:text-slate-100">${worker.hostname}</td>
+                        <td class="px-4 py-3 align-middle text-sm text-gray-600 dark:text-slate-400 font-mono">${worker.addr}</td>
+                        <td class="px-4 py-3 align-middle text-center">
+                            <div class="flex flex-col items-center gap-1">
+                                <span class="text-xs font-bold ${worker.metrics && worker.metrics.cpu_usage > 80 ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}">${cpu}</span>
+                                <div class="w-16 h-1 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                    <div class="h-full bg-blue-500" style="width: ${worker.metrics ? worker.metrics.cpu_usage : 0}%"></div>
+                                </div>
                             </div>
                         </td>
-                    `;
-                    webhookTableBody.insertBefore(row, webhookTableBody.firstChild);
-                    
-                    while (webhookTableBody.children.length > 15) {
-                        webhookTableBody.removeChild(webhookTableBody.lastChild);
-                    }
-                }
-            } catch (e) {
-                console.error("Error handling SSE message:", e);
+                        <td class="px-4 py-3 align-middle text-center">
+                            <div class="flex flex-col items-center gap-1">
+                                <span class="text-xs font-bold text-slate-600 dark:text-slate-300">${mem}</span>
+                                <div class="w-16 h-1 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                    <div class="h-full bg-emerald-500" style="width: ${memPercent}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 align-middle text-center">
+                            <div class="flex flex-col items-center gap-1">
+                                <span class="text-xs font-bold text-slate-600 dark:text-slate-300">${disk}</span>
+                                <div class="w-16 h-1 bg-gray-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                    <div class="h-full bg-amber-500" style="width: ${diskPercent}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-4 py-3 align-middle flex flex-wrap gap-1">${runningTasks}</td>
+                        <td class="px-4 py-3 align-middle"><span class="px-2 py-1 text-[10px] uppercase font-bold rounded-full bg-green-50 text-green-700 border border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800">Online</span></td>
+                    </tr>
+                `;
+            });
+
+            if (rows === '') {
+                rows = "<tr><td colspan='8' class='px-4 py-8 text-center text-slate-500 dark:text-slate-400 italic'>No workers connected</td></tr>";
             }
-        };
+            
+            workersTableBody.innerHTML = rows;
+        }
 
         window.filterTask = function(taskId) {
             activeTaskIdFilter = taskId;
@@ -501,13 +623,16 @@
                     const logModalContent = document.getElementById('log-modal-content');
                     if (logModal && logModalContent) {
                         logModalContent.innerHTML = '';
-                        data.logs.forEach(log => {
+                        data.forEach(log => {
                             const entry = document.createElement('div');
                             entry.className = 'mb-1 flex gap-3 text-xs md:text-sm';
                             const isError = log.output.toLowerCase().includes('failed') || log.output.toLowerCase().includes('error');
                             const textColor = isError ? 'text-red-400 font-medium' : 'text-slate-300';
-                            const timeStr = new Date(log.created_at).toLocaleTimeString();
-                            entry.innerHTML = `<span class="text-slate-500 shrink-0 font-medium select-none">[${timeStr}]</span><span class="${textColor}">${log.output}</span>`;
+                            
+                            const hostTag = log.host ? `<span class="px-1.5 py-0.5 rounded bg-slate-800 text-[10px] font-bold text-slate-400 uppercase border border-slate-700 select-none">${log.host}</span>` : '';
+                            
+                            // Historical logs from DB don't have per-line timestamp in lachuoi_outputs yet, just created_at for the entry
+                            entry.innerHTML = `${hostTag}<span class="${textColor}">${log.output}</span>`;
                             logModalContent.appendChild(entry);
                         });
                         logModal.classList.add('active');
@@ -526,19 +651,49 @@
             if (logModal) logModal.classList.remove('active');
         };
 
-        eventSource.onopen = () => {
-            if (statusIndicator) {
-                statusIndicator.innerText = 'Connected';
-                statusIndicator.className = 'text-xs font-bold text-emerald-400';
+        window.showDetails = function(id) {
+            const row = document.getElementById(`row-${id}`);
+            if (!row) return;
+            
+            const headers = row.getAttribute('data-headers');
+            const body = row.getAttribute('data-body');
+            
+            document.getElementById('modal-headers').textContent = headers;
+            document.getElementById('modal-body').textContent = body;
+            document.getElementById('modal').classList.add('active');
+        };
+
+        window.closeModal = function() {
+            document.getElementById('modal').classList.remove('active');
+        };
+
+        window.deleteWebhook = async function(id) {
+            if (!confirm('Are you sure you want to delete this webhook log?')) return;
+            
+            try {
+                const response = await fetch(`/webhooks/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    const row = document.getElementById(`row-${id}`);
+                    if (row) row.remove();
+                    
+                    // Also update localStorage
+                    try {
+                        const saved = localStorage.getItem('lachuoi-latest-webhooks');
+                        if (saved) {
+                            let webhooks = JSON.parse(saved);
+                            webhooks = webhooks.filter(w => w.id !== id);
+                            localStorage.setItem('lachuoi-latest-webhooks', JSON.stringify(webhooks));
+                        }
+                    } catch(e) {}
+                } else {
+                    alert('Failed to delete webhook log');
+                }
+            } catch (error) {
+                console.error('Error deleting webhook:', error);
+                alert('Error deleting webhook log');
             }
         };
 
-        eventSource.onerror = (e) => {
-            if (statusIndicator) {
-                statusIndicator.innerText = 'Disconnected - retrying...';
-                statusIndicator.className = 'text-xs font-bold text-red-400';
-            }
-        };
     } catch (globalError) {
         console.error("Critical error in app.js:", globalError);
     }

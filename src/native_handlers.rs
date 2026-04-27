@@ -29,8 +29,14 @@ fn heartbeat_handler(counter: Arc<AtomicU32>) -> Arc<dyn Fn(Uuid, Uuid, Db, toki
             let raw_msg = format!("Heartbeat #{}", count + 1);
             let msg = format!("[heartbeat] {}", raw_msg);
             println!("{}", msg);
-            let _ = db.save_log_line(log_id, "heartbeat", &raw_msg).await;
-            let _ = log_sender.send(LogMessage { task_id, text: msg });
+            let _ = db.save_log_line(log_id, "heartbeat", Some("master"), &raw_msg).await;
+            let _ = log_sender.send(LogMessage { 
+                task_id, 
+                log_id: Some(log_id),
+                prefix: Some("heartbeat".to_string()),
+                hostname: Some("master".to_string()),
+                text: msg 
+            });
             Ok(())
         }) as Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
     })
@@ -42,8 +48,14 @@ fn hourly_report_handler(log_id: Uuid, task_id: Uuid, db: Db, log_sender: tokio:
         let raw_msg = "Generating hourly report...";
         let msg = format!("[hourly-report] {}", raw_msg);
         println!("{}", msg);
-        let _ = db.save_log_line(log_id, "hourly-report", raw_msg).await;
-        let _ = log_sender.send(LogMessage { task_id, text: msg });
+        let _ = db.save_log_line(log_id, "hourly-report", Some("master"), raw_msg).await;
+        let _ = log_sender.send(LogMessage { 
+                task_id, 
+                log_id: Some(log_id),
+                prefix: Some("hourly-report".to_string()),
+                hostname: Some("master".to_string()),
+                text: msg 
+            });
         Ok(())
     })
 }
@@ -54,8 +66,14 @@ fn cache_cleanup_handler(log_id: Uuid, task_id: Uuid, db: Db, log_sender: tokio:
         let raw_msg = "Cleaning up cache...";
         let msg = format!("[cache-cleanup] {}", raw_msg);
         println!("{}", msg);
-        let _ = db.save_log_line(log_id, "cache-cleanup", raw_msg).await;
-        let _ = log_sender.send(LogMessage { task_id, text: msg });
+        let _ = db.save_log_line(log_id, "cache-cleanup", Some("master"), raw_msg).await;
+        let _ = log_sender.send(LogMessage { 
+                task_id, 
+                log_id: Some(log_id),
+                prefix: Some("cache-cleanup".to_string()),
+                hostname: Some("master".to_string()),
+                text: msg 
+            });
         Ok(())
     })
 }

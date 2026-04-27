@@ -91,3 +91,35 @@ args = [
   "podman --version",
   "key",
 ]
+
+[[task]]
+name = "Newspenglin RSS"
+cron = "0 */20 * * * *"
+timezone = "Asia/Seoul"
+type = "wasm"
+payload = "newspenguin-rss-bot.wasm"
+sha256 = "ada25daddc99cc60d1fa17391f145e6458894b2316569314c8170f92217aca93"
+[task.env]
+TURSO_DATABASE_URL = "libsql://papyrus-seungjin.aws-ap-northeast-1.turso.io"
+TURSO_AUTH_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NzU4MDIxOTgsImlkIjoiMDE5ZDc1N2YtZDcwMS03ZGJiLWFiNzAtYjUyMTNmODU0MDM4IiwicmlkIjoiMDU5Mjk4ZTMtMmNhNC00MjA1LWIyNDUtN2YzZWViYTM3NWZmIn0.UGkQxth7-iD2PKGvALOdY4vAdlkecdwXgE54VkWO79_PIqAYLObLta-2t5oiagiwI6ncNujy6F8c7WtHfeFiBg"
+NEWSPENGUIN_MSTD_ACCESS_TOKEN = "W_ZaDcw7BVoB7lbY9naAwapgRxKBvRqUsV1_x2xAxLc"
+NEWSPENGUIN_MSTD_API_URI = "https://mstd.seungjin.net"
+NEWSPENGUIN_RSS_URI = "https://www.newspenguin.com/rss/allArticle.xml"
+NEWSPENGUIN_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0     Safari/537.36"
+TURSO_KV_TABLE = "lachuoi_kv_store"
+
+[[task]]
+name = "The Guardian RSS"
+cron = "0 */20 * * * *"
+timezone = "UTC"
+type = "wasm"
+payload = "theguardian-rss-bot.wasm"
+sha256 = "5549d86b9f1d8bad6f528a40011d2c9e9c8431f787a7912b2ed25bd306180948"
+[task.env]
+TURSO_DATABASE_URL = "libsql://papyrus-seungjin.aws-ap-northeast-1.turso.io"
+TURSO_AUTH_TOKEN = "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NzU4MDIxOTgsImlkIjoiMDE5ZDc1N2YtZDcwMS03ZGJiLWFiNzAtYjUyMTNmODU0MDM4IiwicmlkIjoiMDU5Mjk4ZTMtMmNhNC00MjA1LWIyNDUtN2YzZWViYTM3NWZmIn0.UGkQxth7-iD2PKGvALOdY4vAdlkecdwXgE54VkWO79_PIqAYLObLta-2t5oiagiwI6ncNujy6F8c7WtHfeFiBg"
+THEGUARDIAN_MSTD_ACCESS_TOKEN = "YILbrrAw9yZ2snBzQ1EAixa2Ijdfj2MYAG_BKwRrWPo"
+THEGUARDIAN_MSTD_API_URI = "https://mstd.seungjin.net"
+THEGUARDIAN_RSS_URI = "https://www.theguardian.com/us/rss"
+THEGUARDIAN_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0     Safari/537.36"
+TURSO_KV_TABLE = "lachuoi_kv_store"

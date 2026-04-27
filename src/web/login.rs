@@ -112,7 +112,7 @@ pub async fn github_callback(
         }
         Ok(false) => {
             // Not authorized
-            let template = std::fs::read_to_string("web/templates/login.html").unwrap_or_default();
+            let template = tokio::fs::read_to_string("web/templates/login.html").await.unwrap_or_default();
             let error_html = template.replace("<!-- ERROR_MESSAGE -->", 
                 "<div class='bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6 text-sm font-medium'>
                     Access denied. Your GitHub account is not authorized to access this system.
@@ -132,7 +132,7 @@ pub async fn login_page_handler(session: Session) -> impl IntoResponse {
     if session.get::<i64>(USER_SESSION_KEY).await.unwrap().is_some() {
         return Redirect::to("/task-status").into_response();
     }
-    match std::fs::read_to_string("web/templates/login.html") {
+    match tokio::fs::read_to_string("web/templates/login.html").await {
         Ok(t) => Html(t).into_response(),
         Err(e) => Html(format!("Error loading login template: {}", e)).into_response(),
     }

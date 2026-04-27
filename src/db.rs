@@ -58,13 +58,15 @@ impl Db {
         &self,
         log_id: Uuid,
         module: &str,
+        host: Option<&str>,
         output: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "INSERT INTO lachuoi_outputs (log_id, module, output) VALUES (?, ?, ?)",
+            "INSERT INTO lachuoi_outputs (log_id, module, host, output) VALUES (?, ?, ?, ?)",
             libsql::params![
                 log_id.to_string(),
                 module.to_string(),
+                host,
                 output.to_string()
             ]
         )
@@ -279,12 +281,12 @@ impl Db {
         Ok(results)
     }
 
-    pub async fn get_initial_logs(
+    pub async fn get_initial_outputs(
         &self,
         limit: usize,
-    ) -> Result<Vec<(Option<Uuid>, String, String)>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<(Option<Uuid>, String, Option<String>, String)>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT l.task_id, o.output, o.created_at FROM lachuoi_outputs o JOIN lachuoi_logs l ON o.log_id = l.id ORDER BY o.created_at DESC LIMIT ?",
+            "SELECT l.task_id, o.output, o.host, o.created_at FROM lachuoi_outputs o JOIN lachuoi_logs l ON o.log_id = l.id ORDER BY o.created_at DESC LIMIT ?",
             libsql::params![limit as i64]
         ).await?;
 
@@ -293,8 +295,9 @@ impl Db {
             let task_id_str: String = row.get(0)?;
             let task_id = Uuid::parse_str(&task_id_str).ok();
             let output: String = row.get(1)?;
-            let created_at: String = row.get(2)?;
-            results.push((task_id, output, created_at));
+            let host: Option<String> = row.get(2)?;
+            let created_at: String = row.get(3)?;
+            results.push((task_id, output, host, created_at));
         }
         results.reverse();
         Ok(results)
@@ -304,14 +307,16 @@ impl Db {
         &self,
         path: &str,
         method: &str,
+        remote_addr: Option<&str>,
         headers: &str,
         body: &str,
     ) -> Result<WebhookLog, Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "INSERT INTO lachuoi_webhooks (path, method, headers, body) VALUES (?, ?, ?, ?)",
+            "INSERT INTO lachuoi_webhooks (path, method, remote_addr, headers, body) VALUES (?, ?, ?, ?, ?)",
             libsql::params![
                 path.to_string(),
                 method.to_string(),
+                remote_addr.map(|s| s.to_string()),
                 headers.to_string(),
                 body.to_string()
             ]
@@ -325,6 +330,7 @@ impl Db {
             id: row_id,
             path: path.to_string(),
             method: method.to_string(),
+            remote_addr: remote_addr.map(|s| s.to_string()),
             headers: headers.to_string(),
             body: body.to_string(),
             created_at,
@@ -337,7 +343,7 @@ impl Db {
 
     pub async fn get_webhooks_paginated(&self, limit: usize, offset: usize) -> Result<Vec<WebhookLog>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT id, path, method, headers, body, created_at FROM lachuoi_webhooks ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "SELECT id, path, method, remote_addr, headers, body, created_at FROM lachuoi_webhooks ORDER BY created_at DESC LIMIT ? OFFSET ?",
             libsql::params![limit as i64, offset as i64]
         ).await?;
 
@@ -347,9 +353,10 @@ impl Db {
                 id: row.get(0)?,
                 path: row.get(1)?,
                 method: row.get(2)?,
-                headers: row.get(3)?,
-                body: row.get(4)?,
-                created_at: row.get(5)?,
+                remote_addr: row.get(3)?,
+                headers: row.get(4)?,
+                body: row.get(5)?,
+                created_at: row.get(6)?,
             });
         }
         Ok(results)
@@ -375,6 +382,80 @@ impl Db {
             libsql::params![id]
         ).await?;
         Ok(())
+    }
+
+    pub async fn save_task_log(
+        &self,
+        worker_id: Option<&str>,
+        worker_hostname: Option<&str>,
+        direction: &str,
+        method: &str,
+        payload: &str,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.conn.execute(
+            "INSERT INTO lachuoi_task_logs (worker_id, worker_hostname, direction, method, payload) VALUES (?, ?, ?, ?, ?)",
+            libsql::params![
+                worker_id,
+                worker_hostname,
+                direction.to_string(),
+                method.to_string(),
+                payload.to_string()
+            ]
+        )
+        .await?;
+        Ok(())
+    }
+
+    pub async fn get_task_logs_paginated(
+        &self,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<crate::task::TaskLogEntry>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut rows = self.conn.query(
+            "SELECT id, worker_id, worker_hostname, direction, method, payload, created_at FROM lachuoi_task_logs ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            libsql::params![limit as i64, offset as i64]
+        ).await?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows.next().await? {
+            results.push(crate::task::TaskLogEntry {
+                id: row.get(0)?,
+                worker_id: row.get(1)?,
+                worker_hostname: row.get(2)?,
+                direction: row.get(3)?,
+                method: row.get(4)?,
+                payload: row.get(5)?,
+                created_at: row.get(6)?,
+            });
+        }
+        Ok(results)
+    }
+
+    pub async fn get_task_logs_count(&self) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
+        let mut rows = self.conn.query(
+            "SELECT COUNT(*) FROM lachuoi_task_logs",
+            ()
+        ).await?;
+
+        if let Some(row) = rows.next().await? {
+            let count: i64 = row.get(0)?;
+            Ok(count as usize)
+        } else {
+            Ok(0)
+        }
+    }
+
+    pub async fn get_run_logs(&self, log_id: Uuid) -> Result<Vec<(String, Option<String>, String)>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut rows = self.conn.query(
+            "SELECT module, host, output FROM lachuoi_outputs WHERE log_id = ? ORDER BY id ASC",
+            libsql::params![log_id.to_string()]
+        ).await?;
+
+        let mut results = Vec::new();
+        while let Some(row) = rows.next().await? {
+            results.push((row.get(0)?, row.get(1)?, row.get(2)?));
+        }
+        Ok(results)
     }
 }
 
@@ -445,6 +526,7 @@ pub struct WebhookLog {
     pub id: i64,
     pub path: String,
     pub method: String,
+    pub remote_addr: Option<String>,
     pub headers: String,
     pub body: String,
     pub created_at: String,

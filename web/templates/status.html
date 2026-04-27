@@ -49,39 +49,9 @@
         .sidebar-collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; gap: 0; }
         .sidebar-collapsed .logo-text { display: none; }
         .sidebar-collapsed .sidebar-header { justify-content: center; }
-        .sidebar-collapsed .sidebar-header-logo { margin-right: 0; }
-        .sidebar-collapsed .sidebar-header-toggle { 
-            position: absolute; 
-            right: -9px; 
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 50;
-            background: white;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-            padding: 22px 1px;
-            border-radius: 6px;
-        }
-        .sidebar-expanded .sidebar-header-toggle {
-            position: absolute;
-            right: -9px;
-            top: 50%;
-            transform: translateY(-50%);
-            z-index: 50;
-            background: white;
-            border: 1px solid #e2e8f0;
-            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
-            padding: 22px 1px;
-            border-radius: 6px;
-        }
-        .sidebar-header-toggle svg {
-            width: 14px;
-            height: 14px;
-        }
-        .dark .sidebar-header-toggle {
-            background: #1e293b;
-            border-color: #334155;
-        }
+        .sidebar-header-toggle svg { width: 14px; height: 14px; }
+        #sidebar-toggle svg { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .sidebar-collapsed #sidebar-toggle svg { transform: rotate(180deg); }
         .sidebar-collapsed .user-profile-container { gap: 0; justify-content: center; }
     </style>
 </head>
@@ -94,7 +64,7 @@
                 <img src="/static/assets/favicon-32x32.png" class="w-8 h-8 rounded-lg" alt="LC">
                 <span class="logo-text font-extrabold text-lg tracking-tight whitespace-nowrap">La Chuoi</span>
             </div>
-            <button id="sidebar-toggle" class="sidebar-header-toggle p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+            <button id="sidebar-toggle" class="p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                 <svg class="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
             </button>
         </div>
@@ -107,6 +77,14 @@
             <a href="/webhook-status" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-all group" title="Webhook Monitor">
                 <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
                 <span class="nav-text whitespace-nowrap">Webhook Monitor</span>
+            </a>
+            <a href="/workers" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-all group" title="Worker Nodes">
+                <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                <span class="nav-text whitespace-nowrap">Worker Nodes</span>
+            </a>
+            <a href="/cluster-logs" class="nav-item flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium transition-all group" title="Cluster Logs">
+                <svg class="w-5 h-5 min-w-[1.25rem]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <span class="nav-text whitespace-nowrap">Cluster Logs</span>
             </a>
         </nav>
 
@@ -261,7 +239,6 @@
         if (localStorage.getItem('sidebar-collapsed') === 'true') {
             sidebar.classList.remove('sidebar-expanded');
             sidebar.classList.add('sidebar-collapsed');
-            sidebarToggle.querySelector('svg').style.transform = 'rotate(180deg)';
         }
 
         const toggleSidebar = () => {
@@ -269,14 +246,12 @@
             if (isCollapsed) {
                 sidebar.classList.remove('sidebar-collapsed');
                 sidebar.classList.add('sidebar-expanded');
-                sidebarToggle.querySelector('svg').style.transform = 'rotate(0deg)';
                 localStorage.setItem('sidebar-collapsed', 'false');
                 const savedWidth = localStorage.getItem('sidebar-width');
                 if (savedWidth) sidebar.style.width = savedWidth;
             } else {
                 sidebar.classList.remove('sidebar-expanded');
                 sidebar.classList.add('sidebar-collapsed');
-                sidebarToggle.querySelector('svg').style.transform = 'rotate(180deg)';
                 localStorage.setItem('sidebar-collapsed', 'true');
                 sidebar.style.width = ''; // Reset to CSS default for collapsed
             }
