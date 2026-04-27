@@ -491,12 +491,19 @@
                     ? "<span class='text-slate-400 italic'>None</span>"
                     : worker.running_tasks.map(t => `<span class='px-2 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-md text-xs font-bold'>${t}</span>`).join(' ');
 
-                const cpu = worker.metrics ? `${worker.metrics.cpu_usage.toFixed(1)}%` : '-';
-                const mem = worker.metrics ? `${(worker.metrics.memory_used / 1024 / 1024 / 1024).toFixed(1)}GB / ${(worker.metrics.memory_total / 1024 / 1024 / 1024).toFixed(1)}GB` : '-';
-                const disk = worker.metrics ? `${(worker.metrics.disk_used / 1024 / 1024 / 1024).toFixed(0)}GB / ${(worker.metrics.disk_total / 1024 / 1024 / 1024).toFixed(0)}GB` : '-';
+                const cpu = (worker.metrics && typeof worker.metrics.cpu_usage === 'number') ? `${worker.metrics.cpu_usage.toFixed(1)}%` : '-';
+                const load = (worker.metrics && typeof worker.metrics.load_avg_one === 'number') 
+                    ? `${worker.metrics.load_avg_one.toFixed(2)}, ${worker.metrics.load_avg_five.toFixed(2)}, ${worker.metrics.load_avg_fifteen.toFixed(2)}` 
+                    : '-';
+                const mem = (worker.metrics && typeof worker.metrics.memory_used === 'number') 
+                    ? `${(worker.metrics.memory_used / 1024 / 1024 / 1024).toFixed(1)}GB / ${(worker.metrics.memory_total / 1024 / 1024 / 1024).toFixed(1)}GB` 
+                    : '-';
+                const disk = (worker.metrics && typeof worker.metrics.disk_used === 'number') 
+                    ? `${(worker.metrics.disk_used / 1024 / 1024 / 1024).toFixed(0)}GB / ${(worker.metrics.disk_total / 1024 / 1024 / 1024).toFixed(0)}GB` 
+                    : '-';
                 
-                const memPercent = worker.metrics ? (worker.metrics.memory_used / worker.metrics.memory_total * 100).toFixed(0) : 0;
-                const diskPercent = worker.metrics ? (worker.metrics.disk_used / worker.metrics.disk_total * 100).toFixed(0) : 0;
+                const memPercent = (worker.metrics && worker.metrics.memory_total > 0) ? (worker.metrics.memory_used / worker.metrics.memory_total * 100).toFixed(0) : 0;
+                const diskPercent = (worker.metrics && worker.metrics.disk_total > 0) ? (worker.metrics.disk_used / worker.metrics.disk_total * 100).toFixed(0) : 0;
 
                 rows += `
                     <tr class="border-b border-gray-100 dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors">
@@ -511,6 +518,7 @@
                                 </div>
                             </div>
                         </td>
+                        <td class="px-4 py-3 align-middle text-center text-xs font-bold text-slate-600 dark:text-slate-300">${load}</td>
                         <td class="px-4 py-3 align-middle text-center">
                             <div class="flex flex-col items-center gap-1">
                                 <span class="text-xs font-bold text-slate-600 dark:text-slate-300">${mem}</span>
@@ -534,7 +542,7 @@
             });
 
             if (rows === '') {
-                rows = "<tr><td colspan='8' class='px-4 py-8 text-center text-slate-500 dark:text-slate-400 italic'>No workers connected</td></tr>";
+                rows = "<tr><td colspan='9' class='px-4 py-8 text-center text-slate-500 dark:text-slate-400 italic'>No workers connected</td></tr>";
             }
             
             workersTableBody.innerHTML = rows;

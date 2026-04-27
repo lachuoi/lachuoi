@@ -30,6 +30,9 @@ pub struct SystemMetrics {
     pub disk_used: u64,
     pub disk_total: u64,
     pub uptime: u64,
+    pub load_avg_one: Option<f64>,
+    pub load_avg_five: Option<f64>,
+    pub load_avg_fifteen: Option<f64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]

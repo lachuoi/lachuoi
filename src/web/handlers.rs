@@ -32,6 +32,13 @@ pub async fn workers_page_handler(
         };
 
         let cpu = worker.metrics.as_ref().map(|m| format!("{:.1}%", m.cpu_usage)).unwrap_or_else(|| "-".to_string());
+        let load = worker.metrics.as_ref().and_then(|m| {
+            if let (Some(one), Some(five), Some(fifteen)) = (m.load_avg_one, m.load_avg_five, m.load_avg_fifteen) {
+                Some(format!("{:.2}, {:.2}, {:.2}", one, five, fifteen))
+            } else {
+                None
+            }
+        }).unwrap_or_else(|| "-".to_string());
         let mem = worker.metrics.as_ref().map(|m| format!("{:.1}GB / {:.1}GB", m.memory_used as f32 / 1024.0 / 1024.0 / 1024.0, m.memory_total as f32 / 1024.0 / 1024.0 / 1024.0)).unwrap_or_else(|| "-".to_string());
         let disk = worker.metrics.as_ref().map(|m| format!("{:.0}GB / {:.0}GB", m.disk_used as f32 / 1024.0 / 1024.0 / 1024.0, m.disk_total as f32 / 1024.0 / 1024.0 / 1024.0)).unwrap_or_else(|| "-".to_string());
         
@@ -52,6 +59,7 @@ pub async fn workers_page_handler(
                         </div>
                     </div>
                 </td>
+                <td class='px-4 py-3 align-middle text-center text-xs font-bold text-slate-600 dark:text-slate-300'>{load}</td>
                 <td class='px-4 py-3 align-middle text-center'>
                     <div class='flex flex-col items-center gap-1'>
                         <span class='text-xs font-bold text-slate-600 dark:text-slate-300'>{mem}</span>
@@ -76,6 +84,7 @@ pub async fn workers_page_handler(
             addr = worker.addr,
             cpu = cpu,
             cpu_percent = cpu_percent,
+            load = load,
             mem = mem,
             mem_percent = mem_percent,
             disk = disk,
@@ -85,7 +94,7 @@ pub async fn workers_page_handler(
     }
 
     if worker_rows.is_empty() {
-        worker_rows = "<tr><td colspan='8' class='px-4 py-8 text-center text-slate-500 dark:text-slate-400 italic'>No workers connected</td></tr>".to_string();
+        worker_rows = "<tr><td colspan='9' class='px-4 py-8 text-center text-slate-500 dark:text-slate-400 italic'>No workers connected</td></tr>".to_string();
     }
 
     let template = match tokio::fs::read_to_string("web/templates/workers.html").await {
@@ -490,10 +499,17 @@ pub async fn status_page_handler(
 
 pub async fn webhook_status_page_handler(
     State(scheduler): State<Arc<Scheduler>>,
+    axum::extract::Query(params): axum::extract::Query<ClusterLogsParams>,
     session: Session,
 ) -> impl IntoResponse {
+    let page = params.page.unwrap_or(1);
+    let limit = 50;
+    let offset = (page - 1) * limit;
+
     let db = scheduler.get_db();
-    let webhooks = db.get_webhooks().await.unwrap_or_default();
+    let webhooks = db.get_webhooks_paginated(limit, offset).await.unwrap_or_default();
+    let total_count = db.get_webhooks_count().await.unwrap_or(0);
+    let total_pages = (total_count + limit - 1) / limit;
     
     let mut rows = String::new();
     for wh in webhooks {
@@ -525,6 +541,28 @@ pub async fn webhook_status_page_handler(
         rows = "<tr><td colspan='6' class='px-4 py-8 text-center text-slate-500 dark:text-slate-400 italic'>No webhooks received yet</td></tr>".to_string();
     }
 
+    let mut pagination_html = String::new();
+    if total_pages > 1 {
+        pagination_html.push_str("<div class='px-4 py-3 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between'>");
+        pagination_html.push_str(&format!(
+            "<div class='text-sm text-slate-500 dark:text-slate-400'>Showing <span class='font-medium'>{}</span> to <span class='font-medium'>{}</span> of <span class='font-medium'>{}</span> results</div>",
+            if total_count == 0 { 0 } else { offset + 1 },
+            std::cmp::min(offset + limit, total_count),
+            total_count
+        ));
+        pagination_html.push_str("<div class='flex gap-2'>");
+        
+        if page > 1 {
+            pagination_html.push_str(&format!("<a href='/webhook-status?page={}' class='px-3 py-1 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors'>Previous</a>", page - 1));
+        }
+        
+        if page < total_pages {
+            pagination_html.push_str(&format!("<a href='/webhook-status?page={}' class='px-3 py-1 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors'>Next</a>", page + 1));
+        }
+        
+        pagination_html.push_str("</div></div>");
+    }
+
     let template = match tokio::fs::read_to_string("web/templates/webhook_status.html").await {
         Ok(t) => t,
         Err(e) => return Html(format!("Error loading template: {}", e)).into_response(),
@@ -542,6 +580,7 @@ pub async fn webhook_status_page_handler(
 
     Html(template
         .replace("{{rows}}", &rows)
+        .replace("{{pagination}}", &pagination_html)
         .replace("{{user}}", &github_login)
         .replace("{{user_avatar}}", &user_avatar_html))
         .into_response()

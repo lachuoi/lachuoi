@@ -1,7 +1,7 @@
 use futures_util::{StreamExt, SinkExt};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio_tungstenite::{connect_async_with_config, tungstenite::protocol::{Message, WebSocketConfig}, tungstenite::client::IntoClientRequest};
 use wasmtime::{Engine, Config};
 use lachuoi::wasm_handlers::{self, LogSink};
@@ -50,6 +50,7 @@ async fn main() {
     let api_key = std::env::var("LACHUOI_API_KEY").unwrap_or_default();
     let wasm_cache = Arc::new(RwLock::new(HashMap::<String, Vec<u8>>::new()));
     let pending_wasms = Arc::new(RwLock::new(HashMap::<String, Vec<u8>>::new()));
+    let (wasm_tx, _) = tokio::sync::broadcast::channel::<String>(32);
     
     println!("Master URL: {}", master_url);
     if api_key.is_empty() {
@@ -95,11 +96,17 @@ async fn main() {
                                 let disks = sysinfo::Disks::new_with_refreshed_list();
                                 let mut disk_used = 0;
                                 let mut disk_total = 0;
+                                let mut seen_devices = HashSet::new();
                                 
                                 for disk in &disks {
-                                    disk_used += disk.total_space() - disk.available_space();
-                                    disk_total += disk.total_space();
+                                    let fs = disk.file_system().to_string_lossy();
+                                    if fs != "btrfs" || seen_devices.insert(disk.name().to_owned()) {
+                                        disk_used += disk.total_space() - disk.available_space();
+                                        disk_total += disk.total_space();
+                                    }
                                 }
+                                
+                                let load_avg = sysinfo::System::load_average();
                                 
                                 let metrics = SystemMetrics {
                                     cpu_usage: sys.global_cpu_usage(),
@@ -108,6 +115,9 @@ async fn main() {
                                     disk_used,
                                     disk_total,
                                     uptime: sysinfo::System::uptime(),
+                                    load_avg_one: Some(load_avg.one),
+                                    load_avg_five: Some(load_avg.five),
+                                    load_avg_fifteen: Some(load_avg.fifteen),
                                 };
                                 
                                 let rpc_msg = JsonRpcNotification {
@@ -174,7 +184,8 @@ async fn main() {
                                                 if let Ok(MasterMessage::WasmEnd { path }) = serde_json::from_value::<MasterMessage>(rpc_msg.params) {
                                                     if let Some(binary) = pending_wasms.write().await.remove(&path) {
                                                         println!("Completed reception of WASM file: {} ({} bytes)", path, binary.len());
-                                                        wasm_cache.write().await.insert(path, binary);
+                                                        wasm_cache.write().await.insert(path.clone(), binary);
+                                                        let _ = wasm_tx.send(path);
                                                     }
                                                 }
                                             },
@@ -184,8 +195,9 @@ async fn main() {
                                                         let tx_clone = tx.clone();
                                                         let wasm_cache_clone = wasm_cache.clone();
                                                         let hostname_clone = hostname.clone();
+                                                        let wasm_tx_clone = wasm_tx.clone();
                                                         tokio::spawn(async move {
-                                                            execute_task(req, tx_clone, wasm_cache_clone, hostname_clone).await;
+                                                            execute_task(req, tx_clone, wasm_cache_clone, hostname_clone, wasm_tx_clone).await;
                                                         });
                                                     }
                                                 }
@@ -215,7 +227,13 @@ async fn main() {
     }
 }
 
-async fn execute_task(req: RunRequest, tx: tokio::sync::mpsc::UnboundedSender<JsonRpcNotification>, wasm_cache: Arc<RwLock<HashMap<String, Vec<u8>>>>, hostname: String) {
+async fn execute_task(
+    req: RunRequest,
+    tx: tokio::sync::mpsc::UnboundedSender<JsonRpcNotification>,
+    wasm_cache: Arc<RwLock<HashMap<String, Vec<u8>>>>,
+    hostname: String,
+    wasm_tx: tokio::sync::broadcast::Sender<String>
+) {
     let mut config = Config::new();
     config.async_support(true);
     config.wasm_component_model(true);
@@ -232,7 +250,7 @@ async fn execute_task(req: RunRequest, tx: tokio::sync::mpsc::UnboundedSender<Js
         params: serde_json::to_value(started_msg).unwrap(),
     });
 
-    let binary = {
+    let mut binary = {
         let cache = wasm_cache.read().await;
         if let Some(bin) = cache.get(&req.wasm_path) {
             // Verify SHA256 if provided
@@ -240,7 +258,7 @@ async fn execute_task(req: RunRequest, tx: tokio::sync::mpsc::UnboundedSender<Js
                 let mut hasher = Sha256::new();
                 hasher.update(bin);
                 let actual = hex::encode(hasher.finalize());
-                
+
                 if actual == *expected {
                     Some(bin.clone())
                 } else {
@@ -255,6 +273,79 @@ async fn execute_task(req: RunRequest, tx: tokio::sync::mpsc::UnboundedSender<Js
         }
     };
 
+    // If binary is missing or checksum failed, request it again and wait
+    if binary.is_none() {
+        println!("Requesting WASM from master due to missing or invalid cache: {}", req.wasm_path);
+        let mut wasm_rx = wasm_tx.subscribe();
+
+        let get_req = JsonRpcNotification {
+            jsonrpc: "2.0".to_string(),
+            method: "get_wasm".to_string(),
+            params: serde_json::json!({ "path": req.wasm_path }),
+        };
+        let _ = tx.send(get_req);
+
+        // Wait for the WASM file to be received (with timeout)
+        let wait_result = tokio::time::timeout(std::time::Duration::from_secs(60), async {
+            while let Ok(path) = wasm_rx.recv().await {
+                if path == req.wasm_path {
+                    return true;
+                }
+            }
+            false
+        }).await;
+
+        match wait_result {
+            Ok(true) => {
+                let cache = wasm_cache.read().await;
+                if let Some(bin) = cache.get(&req.wasm_path) {
+                    if let Some(expected) = &req.expected_sha256 {
+                        let mut hasher = Sha256::new();
+                        hasher.update(bin);
+                        let actual = hex::encode(hasher.finalize());
+
+                        if actual == *expected {
+                            binary = Some(bin.clone());
+                        } else {
+                            let err_msg = format!("SHA256 mismatch for re-downloaded WASM {}: expected {}, got {}. Aborting task.", req.wasm_path, expected, actual);
+                            println!("{}", err_msg);
+                            let result_msg = WorkerMessage::TaskResult {
+                                task_id: req.task_id,
+                                log_id: req.log_id,
+                                success: false,
+                                error: Some(err_msg),
+                            };
+                            let _ = tx.send(JsonRpcNotification {
+                                jsonrpc: "2.0".to_string(),
+                                method: "task_result".to_string(),
+                                params: serde_json::to_value(result_msg).unwrap(),
+                            });
+                            return;
+                        }
+                    } else {
+                        binary = Some(bin.clone());
+                    }
+                }
+            },
+            _ => {
+                let err_msg = format!("Timed out or failed waiting for WASM file: {}", req.wasm_path);
+                println!("{}", err_msg);
+                let result_msg = WorkerMessage::TaskResult {
+                    task_id: req.task_id,
+                    log_id: req.log_id,
+                    success: false,
+                    error: Some(err_msg),
+                };
+                let _ = tx.send(JsonRpcNotification {
+                    jsonrpc: "2.0".to_string(),
+                    method: "task_result".to_string(),
+                    params: serde_json::to_value(result_msg).unwrap(),
+                });
+                return;
+            }
+        }
+    }
+
     let result = if let Some(binary) = binary {
         let sink = Arc::new(WebSocketLogSink { tx: tx.clone(), hostname: hostname.clone() });
         wasm_handlers::run_wasm_binary(
@@ -268,17 +359,8 @@ async fn execute_task(req: RunRequest, tx: tokio::sync::mpsc::UnboundedSender<Js
             req.log_id,
             req.task_id,
         ).await
-    } else {        // If binary is missing or checksum failed, request it again
-        if req.expected_sha256.is_some() {
-             println!("Requesting WASM from master due to missing or invalid cache: {}", req.wasm_path);
-        }
-        let get_req = JsonRpcNotification {
-            jsonrpc: "2.0".to_string(),
-            method: "get_wasm".to_string(),
-            params: serde_json::json!({ "path": req.wasm_path }),
-        };
-        let _ = tx.send(get_req);
-        Err(format!("WASM binary not found or checksum failed in worker cache: {}. Requested from master.", req.wasm_path).into())
+    } else {
+        Err(format!("WASM binary not found: {}", req.wasm_path).into())
     };
 
     let (success, error) = match result {
@@ -298,6 +380,5 @@ async fn execute_task(req: RunRequest, tx: tokio::sync::mpsc::UnboundedSender<Js
         method: "task_result".to_string(),
         params: serde_json::to_value(result_msg).unwrap(),
     };
-
     let _ = tx.send(rpc_msg);
 }
