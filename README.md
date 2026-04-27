@@ -15,11 +15,12 @@ A high-performance, distributed WASI runtime and task management engine built wi
 ## 🚀 Key Features
 
 - **Distributed Architecture**: Decouple task scheduling (Master) from task execution (Worker).
-- **WebSocket Communication**: Master and Workers communicate via persistent, real-time WebSocket connections.
+- **WebSocket Communication**: Master and Workers communicate via persistent, real-time WebSocket connections protected by `X-API-Key`.
 - **Hybrid Execution**: Run native Rust tasks on the Master or delegate secure, sandboxed WASM components to specialized Workers.
-- **Web Services & Webhooks**: Integrated support for receiving and processing webhooks, enabling event-driven task execution and web-based servicing.
+- **Web Services & Webhooks**: Integrated support for receiving and processing webhooks, enabling event-driven task execution.
 - **Universal WASI Runtime**: Full support for WASI Preview 1 and the modern Component Model (Preview 2).
-- **WASI-HTTP Support**: Sandboxed components can perform secure outbound HTTP requests and participate in web-based workflows.
+- **Security & Integrity**: Unified middleware for GitHub OAuth and API Key authentication. Mandatory SHA256 checksum verification on both Master and Worker nodes.
+- **Cluster Monitoring**: Comprehensive event logging (JSON-RPC) and real-time status tracking via SSE.
 
 ### 🎨 Modern Dashboard & Theme Support
 <div align="center">
@@ -27,13 +28,8 @@ A high-performance, distributed WASI runtime and task management engine built wi
 </div>
 
 - **Dark/Light Theme**: Built-in support for system-preferred or manual theme switching.
-- **Real-time Monitoring**: Live execution logs and status updates via Server-Sent Events (SSE).
+- **Real-time Monitoring**: Live execution logs, worker resource metrics, and task status updates via Server-Sent Events (SSE).
 - **Interactive Controls**: Enable, disable, and sort tasks directly from the web UI.
-
-- **Remote WASM**: Download WASM binaries directly from HTTPS URLs with mandatory verification.
-- **WASM Security**: Mandatory SHA256 checksum verification for all WASM binaries (local or remote).
-- **Persistent State**: Database-backed sessions, execution history, and Webhook Monitor (Turso/libSQL).
-- **Zero-Downtime Reloads**: Hot-reload `cron.toml` configuration without stopping the service.
 
 ---
 
@@ -59,6 +55,9 @@ TURSO_AUTH_TOKEN="your-secret-token"           # Only for remote Turso
 GITHUB_CLIENT_ID="your_client_id"
 GITHUB_CLIENT_SECRET="your_client_secret"
 GITHUB_REDIRECT_URL="https://your-domain.com/auth/github/callback"
+
+# Security
+LACHUOI_API_KEY="a-very-strong-secret-key"
 ```
 
 ### 2. Task Configuration (`cron.toml`)
@@ -81,16 +80,6 @@ type = "wasm"
 payload = "weather.wasm"
 sha256 = "ad677d5c7c136f862aed95f61879d0b0bb80cfb6f9921..."
 args = ["--city", "Seoul"]
-
-# WASM Plugin Task (Remote)
-[[task]]
-name = "github-stats"
-cron = "0 0 * * * *"
-timezone = "UTC"
-type = "wasm"
-payload = "https://example.com/plugins/github.wasm"
-sha256 = "b5bb9d8014a0f9b1d61e21e796d78dccdf1352f23cd328..."
-
 ```
 
 ---
@@ -106,8 +95,8 @@ cargo run --release --bin lachuoi
 ### 2. Start the Worker (`lachuoi-worker`)
 The worker connects to the master and executes WASM tasks.
 ```bash
-export LACHUOI_MASTER_WS_URL="wss://127.0.0.1/ws/worker"
-export LACHUOI_API_KEY="your_api_key"
+export LACHUOI_MASTER_WS_URL="wss://your-master-node.com/ws/worker"
+export LACHUOI_API_KEY="your-very-strong-secret-key"
 cargo run --release --bin lachuoi-worker
 ```
 
@@ -116,7 +105,6 @@ If you modify `cron.toml`, you can reload the configuration without restarting t
 ```bash
 ./target/release/lachuoi reload
 ```
-*This sends a SIGHUP signal to the main process via its PID file.*
 
 ---
 
@@ -126,17 +114,11 @@ If you modify `cron.toml`, you can reload the configuration without restarting t
 La Chuoi uses a **Master/Worker** architecture for scalability and isolation:
 - **Master**: Responsible for task scheduling, persistent state (SQLite), GitHub OAuth, and the Web Dashboard. It acts as a WebSocket server.
 - **Worker**: Lightweight instances that connect to the Master. They host the Wasmtime runtime and execute tasks on demand.
-- **Real-time Logging**: Workers stream task output back to the Master via WebSocket, which then broadcasts it to the Web Dashboard via SSE.
+- **Real-time Metrics**: Workers stream resource usage (CPU, Memory, Disk) and task status back to the Master for live dashboard updates.
 
-### Native Handlers (Master)
-Native tasks are modularized in `src/native_handlers.rs`. These are compiled directly into the Master binary for performance-critical or system-level logic.
-
-### WASM Runtime & Services (Worker)
-WASM tasks and services run in a strictly sandboxed environment using **Wasmtime** on the Worker nodes.
-- **SHA256 Check**: The Master verifies the binary hash before sending it to the Worker.
-- **WebSocket Delegation**: If one or more Workers are connected, the Master automatically delegates WASM tasks to them.
-- **WASI-HTTP**: Components can interact with external web services securely.
-- **Argument Resolution**: Supports dynamic argument injection (e.g., `file:~/.ssh/id_ed25519` or `env:VAR_NAME`).
+### Security & Authentication
+- **Unified Middleware**: All administrative and API endpoints are protected by a unified authentication layer. It supports either a valid GitHub OAuth session or a secure `X-API-Key` header.
+- **WASM Integrity**: Before executing any WASM binary, the Worker verifies its SHA256 checksum against the expected value provided by the Master. If a mismatch is detected or the binary is missing, the Worker automatically re-downloads a fresh copy from the Master.
 
 ---
 
@@ -145,10 +127,10 @@ WASM tasks and services run in a strictly sandboxed environment using **Wasmtime
 Accessible at `http://localhost:9130` (default port).
 
 - **Monitoring**: View all tasks, their schedules, and real-time status.
-- **Sorting**: Click any column header to sort tasks.
-- **Controls**: Enable or disable tasks directly from the UI.
-- **Live Logs**: View the last 1000 lines of execution logs in the real-time console.
-- **Webhook Monitor**: Track incoming webhook requests and payloads in the database.
+- **Worker Nodes**: Real-time overview of connected workers, including their system resource metrics and currently running tasks.
+- **Cluster Logs**: A comprehensive audit trail of Master/Worker interactions (JSON-RPC), task triggers, and execution results.
+- **Live Logs**: View execution output in real-time directly from the dashboard.
+- **Webhook Monitor**: Track incoming webhook requests, including headers and payloads.
 
 ---
 
