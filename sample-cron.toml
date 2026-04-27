@@ -1,0 +1,36 @@
+# La Chuoi Task Configuration Sample
+
+# Basic native task
+[[task]]
+name = "heartbeat"
+cron = "0 * * * * *"
+timezone = "UTC"
+type = "native"
+
+# Task with specific timezone and interval
+[[task]]
+name = "cleanup-temp-files"
+cron = "0 */30 * * * *"
+timezone = "Asia/Seoul"
+type = "native"
+
+# WASM task with payload and checksum
+[[task]]
+name = "wasm-processor"
+cron = "0 0 * * * *"
+timezone = "UTC"
+type = "wasm"
+payload = "processor.wasm"
+sha256 = "2e45e356ee4a7587927d61a898e493af8507a26dc6c05413898100e90dc39239"
+
+# WASM task with environment variables and arguments
+[[task]]
+name = "data-sync"
+cron = "0 0 2 * * *"
+timezone = "Asia/Seoul"
+type = "wasm"
+payload = "sync.wasm"
+args = ["--verbose", "--mode=full"]
+[task.env]
+DB_URL = "postgres://user:password@localhost/db"
+LOG_LEVEL = "info"
