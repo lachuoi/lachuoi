@@ -106,6 +106,33 @@ If you modify `cron.toml`, you can reload the configuration without restarting t
 ./target/release/lachuoi reload
 ```
 
+### Systemd User Services
+For production or long-running instances, you can use the provided systemd user service files:
+```bash
+mkdir -p ~/.config/systemd/user/
+cp systemd/*.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now lachuoi lachuoi-worker
+```
+*See [systemd/README.md](systemd/README.md) for detailed instructions.*
+
+---
+
+## 🛠️ Development & Releases
+
+The project uses `just` as a command runner for common tasks.
+
+- **Build all**: `just build --release`
+- **Database Init**: `just db-init` (requires `sqlite3`)
+- **Run Master**: `just run-master`
+- **Run Worker**: `just run-worker`
+- **Check All**: `just check-all` (lint, fmt, test)
+
+### Releasing a New Version
+Version synchronization is automated between `Cargo.toml`, Git tags, and Container images:
+1. Update `version` in `Cargo.toml`.
+2. Run `just release`. This will tag the commit and push it to GitHub, triggering a container build for both Master and Worker.
+
 ---
 
 ## 🧩 Architecture
@@ -136,11 +163,20 @@ Accessible at `http://localhost:9130` (default port).
 
 ## 📦 Deployment
 
-The project includes a `Containerfile` for Docker/Podman deployment:
+### Container Images
+La Chuoi provides separate, optimized container images for Master and Worker nodes via GitHub Packages (GHCR).
+
+**Master Node:**
 ```bash
-podman build -t lachuoi .
-podman run -p 9130:9130 --env-file .env lachuoi
+podman run -p 9130:9130 --env-file .env ghcr.io/your-username/lachuoi:latest
 ```
+
+**Worker Node:**
+```bash
+podman run --env LACHUOI_MASTER_WS_URL="wss://your-master.com/ws/worker" --env LACHUOI_API_KEY="your-key" ghcr.io/your-username/lachuoi-worker:latest
+```
+
+You can also build them locally using the provided `Containerfile.master` and `Containerfile.worker`.
 
 ---
 
