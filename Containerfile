@@ -15,36 +15,44 @@ WORKDIR /app
 # Copy manifest and lock for dependency caching
 COPY Cargo.toml Cargo.lock ./
 
-# Create a dummy source to pre-build dependencies
-RUN mkdir src && echo "fn main() {}" > src/main.rs && cargo build --release && rm -rf src
+# Create dummy sources to pre-build dependencies for all binaries
+RUN mkdir -p src/bin && \
+    echo "fn main() {}" > src/main.rs && \
+    echo "fn main() {}" > src/bin/worker.rs && \
+    cargo build --release && \
+    rm -rf src
 
 # Copy actual source and static assets
 COPY src ./src
 COPY web ./web
 COPY plugins ./plugins
 COPY cron.toml ./
+COPY schema.sql ./
 
 # Build the real application
-# We touch main.rs to ensure cargo knows it needs to rebuild after the dummy run
-RUN touch src/main.rs && cargo build --release
+# We touch the main source files to ensure cargo knows it needs to rebuild after the dummy run
+RUN touch src/main.rs src/bin/worker.rs && cargo build --release
 
 # --- Runtime Stage ---
 FROM debian:bookworm-slim
 
-# Install runtime dependencies (ca-certificates for HTTPS/Turso)
+# Install runtime dependencies (ca-certificates for HTTPS/Turso, sqlite3 for manual DB init)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy the binary from builder
+# Copy the binaries from builder
 COPY --from=builder /app/target/release/lachuoi /app/lachuoi
+COPY --from=builder /app/target/release/lachuoi-worker /app/lachuoi-worker
 
 # Copy required runtime directories and files
 COPY --from=builder /app/web /app/web
 COPY --from=builder /app/plugins /app/plugins
 COPY --from=builder /app/cron.toml /app/cron.toml
+COPY --from=builder /app/schema.sql /app/schema.sql
 
 # Create a directory for the database to allow volume mounting
 RUN mkdir /app/data
@@ -53,5 +61,6 @@ ENV TURSO_DATABASE_URL="/app/data/tasks.db"
 # Expose the web server port
 EXPOSE 9130
 
-# Run the scheduler
+# Default to running the master node (lachuoi)
+# Use --entrypoint or override CMD to run lachuoi-worker
 CMD ["./lachuoi"]
