@@ -1,0 +1,16 @@
+[Unit]
+Description=La Chuoi Worker Service
+# Ensure master is started before worker if running on the same machine
+After=network.target lachuoi.service
+
+[Service]
+Type=simple
+WorkingDirectory=/var/home/seungjin/Works/lachuoi-home/lachuoi
+ExecStart=/var/home/seungjin/Works/lachuoi-home/lachuoi/target/release/lachuoi-worker
+# Use a separate env file for worker if needed, or the same one
+EnvironmentFile=/var/home/seungjin/Works/lachuoi-home/lachuoi/.env
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=La Chuoi Master Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/home/seungjin/Works/lachuoi-home/lachuoi
+ExecStart=/var/home/seungjin/Works/lachuoi-home/lachuoi/target/release/lachuoi
+# Use the .env file for configuration
+EnvironmentFile=/var/home/seungjin/Works/lachuoi-home/lachuoi/.env
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
