@@ -1,3 +1,6 @@
+// Copyright 2026 Seungjin Kim
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::fs;

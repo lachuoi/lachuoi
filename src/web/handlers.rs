@@ -1,3 +1,6 @@
+// Copyright 2026 Seungjin Kim
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use axum::{Json, extract::{State, Path}, response::{Html, IntoResponse}, response::sse::{Event, Sse}, http::{StatusCode, Method, HeaderMap}};
 use std::sync::Arc;
 use uuid::Uuid;

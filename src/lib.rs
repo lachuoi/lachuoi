@@ -1,3 +1,6 @@
+// Copyright 2026 Seungjin Kim
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 pub mod async_scheduler;
 pub mod config;
 pub mod db;

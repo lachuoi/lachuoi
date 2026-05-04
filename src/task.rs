@@ -1,3 +1,6 @@
+// Copyright 2026 Seungjin Kim
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use chrono::{DateTime, Utc, Duration};
 use chrono_tz::Tz;
 use cron::Schedule;

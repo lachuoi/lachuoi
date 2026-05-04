@@ -1,3 +1,6 @@
+// Copyright 2026 Seungjin Kim
+// SPDX-License-Identifier: MIT OR Apache-2.0
+
 use futures_util::{StreamExt, SinkExt};
 use std::sync::Arc;
 use tokio::sync::RwLock;

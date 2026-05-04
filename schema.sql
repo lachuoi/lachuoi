@@ -1,3 +1,6 @@
+-- Copyright 2026 Seungjin Kim
+-- SPDX-License-Identifier: MIT OR Apache-2.0
+
 -- User Authorization Table
 CREATE TABLE IF NOT EXISTS lachuoi_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
