@@ -49,6 +49,15 @@ clean:
     cargo clean
     rm -f .scheduler.pid
 
+# Tag and push a new release based on the version in Cargo.toml
+release:
+    #!/usr/bin/env bash
+    VERSION=$(grep '^version =' Cargo.toml | cut -d '"' -f 2)
+    echo "Releasing v$VERSION..."
+    git tag -a "v$VERSION" -m "Release v$VERSION"
+    git push origin "v$VERSION"
+    git push origin main
+
 tr:
     just build --release
     rsync -avhz cron.toml 1.c:~/app/lachuoi/
