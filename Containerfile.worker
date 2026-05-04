@@ -1,0 +1,52 @@
+# Copyright 2026 Seungjin Kim
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+# --- Build Stage ---
+FROM rust:1.81-slim-bookworm AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy manifest and lock for dependency caching
+COPY Cargo.toml Cargo.lock ./
+
+# Create dummy sources to pre-build dependencies for the worker
+RUN mkdir -p src/bin && \
+    echo "fn main() {}" > src/main.rs && \
+    echo "fn main() {}" > src/bin/worker.rs && \
+    cargo build --release --bin lachuoi-worker && \
+    rm -rf src
+
+# Copy actual source
+COPY src ./src
+
+# Build the real worker binary
+RUN touch src/bin/worker.rs && cargo build --release --bin lachuoi-worker
+
+# --- Runtime Stage ---
+FROM debian:bookworm-slim
+
+# Install runtime dependencies (ca-certificates for HTTPS connection to Master)
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy the worker binary from builder
+COPY --from=builder /app/target/release/lachuoi-worker /app/lachuoi-worker
+
+# Workers don't strictly need static assets or schema.sql as they act as clients
+# They manage their own WASM cache in memory or downloaded on demand
+
+# Default environment variables for worker
+ENV LACHUOI_MASTER_WS_URL="ws://localhost:9130/ws/worker"
+ENV LACHUOI_API_KEY=""
+
+# Run the worker
+CMD ["./lachuoi-worker"]
