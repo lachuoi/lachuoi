@@ -5,8 +5,7 @@ use axum::{Json, extract::{State, Path}, response::{Html, IntoResponse}, respons
 use std::sync::Arc;
 use uuid::Uuid;
 use crate::scheduler::Scheduler;
-use axum::extract::ws::{WebSocket, WebSocketUpgrade, Message};
-use futures_util::SinkExt;
+use axum::extract::ws::{WebSocket, WebSocketUpgrade};
 use axum::extract::ConnectInfo;
 use std::net::SocketAddr;
 use serde::Deserialize;
@@ -122,6 +121,58 @@ pub async fn workers_page_handler(
         .into_response()
 }
 
+use crate::rpc::{MasterService, WorkerServiceClient, WsTransport, multiplex};
+use tarpc::server::{self, Channel};
+
+#[derive(Clone)]
+struct MasterServer {
+    scheduler: Arc<Scheduler>,
+    worker_id: Uuid,
+    _hostname: String,
+}
+
+impl MasterService for MasterServer {
+    async fn log(self, _: tarpc::context::Context, msg: crate::task::LogMessage) {
+        let db = self.scheduler.get_db();
+        if let (Some(log_id), Some(prefix)) = (msg.log_id, &msg.prefix) {
+            let _ = db.save_log_line(log_id, prefix, msg.hostname.as_deref(), &msg.text).await;
+            self.scheduler.send_log(msg);
+        }
+    }
+
+    async fn report_metrics(self, _: tarpc::context::Context, metrics: crate::task::SystemMetrics) {
+        self.scheduler.update_worker_metrics(self.worker_id, metrics).await;
+    }
+
+    async fn get_wasm(self, _: tarpc::context::Context, path: String) -> Option<Vec<u8>> {
+        self.scheduler.get_wasm_binary(&path).await.map(|arc| (*arc).clone())
+    }
+
+    async fn task_started(self, _: tarpc::context::Context, task_id: i64, task_name: String) {
+        self.scheduler.update_worker_task(self.worker_id, task_id, task_name, true).await;
+        self.scheduler.broadcast_status().await;
+    }
+
+    async fn task_result(self, _: tarpc::context::Context, task_id: i64, _log_id: Uuid, _success: bool, _error: Option<String>) {
+        self.scheduler.update_worker_task(self.worker_id, task_id, "".to_string(), false).await;
+        self.scheduler.broadcast_status().await;
+    }
+
+    async fn kv_get(self, _: tarpc::context::Context, task_id: i64, token: String, key: String) -> Option<String> {
+        if self.scheduler.check_task_token(task_id, &token).await {
+            self.scheduler.get_db().get_app_kv(task_id, &key).await.ok().flatten()
+        } else {
+            None
+        }
+    }
+
+    async fn kv_set(self, _: tarpc::context::Context, task_id: i64, token: String, key: String, value: String) {
+        if self.scheduler.check_task_token(task_id, &token).await {
+            let _ = self.scheduler.get_db().set_app_kv(task_id, &key, &value).await;
+        }
+    }
+}
+
 pub async fn worker_websocket_handler(
     ws: WebSocketUpgrade,
     headers: HeaderMap,
@@ -136,7 +187,6 @@ pub async fn worker_websocket_handler(
 
     let hostname = headers.get("X-Worker-Hostname").and_then(|h| h.to_str().ok()).unwrap_or_else(|| "unknown").to_string();
     
-    // Fallback for IP address: X-Forwarded-For -> ConnectInfo
     let ip_addr = headers.get("x-forwarded-for")
                 .and_then(|h| h.to_str().ok())
                 .and_then(|s| s.split(',').next())
@@ -148,10 +198,34 @@ pub async fn worker_websocket_handler(
 }
 
 async fn handle_worker_socket(socket: WebSocket, scheduler: Arc<Scheduler>, addr: String, hostname: String) {
-    let (mut sink, mut stream) = futures_util::StreamExt::split(socket);
+    use futures_util::StreamExt;
     let worker_id = Uuid::new_v4();
     
-    let (direct_tx, mut direct_rx) = tokio::sync::mpsc::unbounded_channel::<crate::task::MasterMessage>();
+    // Wrap WebSocket in tarpc-compatible transport
+    let transport = WsTransport::new(
+        socket,
+        |bin| axum::extract::ws::Message::Binary(bin.into()),
+        |msg| {
+            if let axum::extract::ws::Message::Binary(bin) = msg {
+                Some(bin.into())
+            } else {
+                None
+            }
+        }
+    );
+    
+    // Multiplex bidirectional RPC
+    let (master_transport, worker_transport) = multiplex(transport);
+
+    // Setup Master Server (handles calls FROM worker)
+    let master_server = MasterServer {
+        scheduler: scheduler.clone(),
+        worker_id,
+        _hostname: hostname.clone(),
+    };
+
+    // Setup Worker Client (allows calling TO worker)
+    let worker_client = WorkerServiceClient::new(tarpc::client::Config::default(), worker_transport).spawn();
 
     let worker_info = crate::task::WorkerInfo {
         id: worker_id,
@@ -160,230 +234,21 @@ async fn handle_worker_socket(socket: WebSocket, scheduler: Arc<Scheduler>, addr
         running_tasks: Vec::new(),
         metrics: None,
     };
-    scheduler.add_worker(worker_info, direct_tx.clone()).await;
     
+    scheduler.add_worker(worker_info, worker_client.clone()).await;
     let _registration = scheduler.clone().track_worker(worker_id);
-    let mut master_rx = scheduler.subscribe_worker_messages();
 
-    println!("Worker connected via WebSocket: {} ({}). Active workers: {}", hostname, addr, scheduler.num_workers());
+    println!("Worker connected via tarpc/WebSocket: {} ({}). Active workers: {}", hostname, addr, scheduler.num_workers());
 
-    // Send bootstrap info immediately
-    let bootstrap_msg = scheduler.get_bootstrap_info().await;
-    let rpc_msg = crate::task::JsonRpcNotification {
-        jsonrpc: "2.0".to_string(),
-        method: "bootstrap".to_string(),
-        params: serde_json::to_value(bootstrap_msg).unwrap(),
-    };
-    let bootstrap_json = serde_json::to_string(&rpc_msg).unwrap();
-    
-    // Log outgoing bootstrap
-    let _ = scheduler.get_db().save_task_log(Some(&worker_id.to_string()), Some(&hostname), "master_to_worker", "bootstrap", &bootstrap_json).await;
+    // Send bootstrap info
+    let bootstrap_info = scheduler.get_bootstrap_info_rpc().await;
+    let _ = worker_client.bootstrap(tarpc::context::current(), bootstrap_info.0, bootstrap_info.1).await;
 
-    if let Err(e) = sink.send(Message::Text(bootstrap_json.into())).await {
-        eprintln!("Failed to send bootstrap info to worker {}: {}", hostname, e);
-        return;
-    }
-
-    // Task to send messages from master to worker
-    let hostname_for_send = hostname.clone();
-    let worker_id_for_send = worker_id.clone();
-    let db_for_send = scheduler.get_db();
-    let mut send_task = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(30));
-        loop {
-            tokio::select! {
-                _ = interval.tick() => {
-                    let ping_fut = sink.send(Message::Ping(Vec::new()));
-                    if tokio::time::timeout(std::time::Duration::from_secs(10), ping_fut).await.is_err() {
-                        eprintln!("Timeout sending ping to worker {}", hostname_for_send);
-                        break;
-                    }
-                }
-                msg = direct_rx.recv() => {
-                    if let Some(msg) = msg {
-                        let method = match &msg {
-                            crate::task::MasterMessage::Bootstrap(_) => "bootstrap",
-                            crate::task::MasterMessage::WasmBegin { .. } => "wasm_begin",
-                            crate::task::MasterMessage::WasmChunk { .. } => "wasm_chunk",
-                            crate::task::MasterMessage::WasmEnd { .. } => "wasm_end",
-                            crate::task::MasterMessage::RunTask(_) => "run_task",
-                        };
-                        
-                        let rpc_msg = crate::task::JsonRpcNotification {
-                            jsonrpc: "2.0".to_string(),
-                            method: method.to_string(),
-                            params: serde_json::to_value(msg).unwrap(),
-                        };
-                        
-                        let json = serde_json::to_string(&rpc_msg).unwrap();
-                        
-                        // Log outgoing direct message (skip chunks for brevity)
-                        if method != "wasm_chunk" {
-                            let _ = db_for_send.save_task_log(Some(&worker_id_for_send.to_string()), Some(&hostname_for_send), "master_to_worker", method, &json).await;
-                        }
-
-                        let send_fut = sink.send(Message::Text(json.into()));
-                        if tokio::time::timeout(std::time::Duration::from_secs(10), send_fut).await.is_err() {
-                            eprintln!("Timeout sending direct message to worker {}", hostname_for_send);
-                            break;
-                        }
-                    } else {
-                        break;
-                    }
-                }
-                msg = master_rx.recv() => {
-                    match msg {
-                        Ok(msg) => {
-                            let method = match &msg {
-                                crate::task::MasterMessage::Bootstrap(_) => "bootstrap",
-                                crate::task::MasterMessage::WasmBegin { .. } => "wasm_begin",
-                                crate::task::MasterMessage::WasmChunk { .. } => "wasm_chunk",
-                                crate::task::MasterMessage::WasmEnd { .. } => "wasm_end",
-                                crate::task::MasterMessage::RunTask(_) => "run_task",
-                            };
-                            
-                            let rpc_msg = crate::task::JsonRpcNotification {
-                                jsonrpc: "2.0".to_string(),
-                                method: method.to_string(),
-                                params: serde_json::to_value(msg).unwrap(),
-                            };
-                            
-                            let json = serde_json::to_string(&rpc_msg).unwrap();
-                            
-                            // Log outgoing broadcast message (skip chunks)
-                            if method != "wasm_chunk" {
-                                let _ = db_for_send.save_task_log(Some(&worker_id_for_send.to_string()), Some(&hostname_for_send), "master_to_worker", method, &json).await;
-                            }
-
-                            let send_fut = sink.send(Message::Text(json.into()));
-                            if tokio::time::timeout(std::time::Duration::from_secs(10), send_fut).await.is_err() {
-                                eprintln!("Timeout sending broadcast message to worker {}", hostname_for_send);
-                                break;
-                            }
-                        },
-                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
-                            eprintln!("Worker {} message stream lagged by {} messages", hostname_for_send, n);
-                            continue;
-                        },
-                        Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
-                    }
-                }
-            }
-        }
-    });
-
-    // Task to receive messages from worker
-    let scheduler_clone = scheduler.clone();
-    let hostname_clone = hostname.clone();
-    let worker_id_str = worker_id.to_string();
-    let direct_tx_clone = direct_tx.clone();
-    let db_for_recv = scheduler.get_db();
-    let mut recv_task = tokio::spawn(async move {
-        while let Some(res) = futures_util::StreamExt::next(&mut stream).await {
-            match res {
-                Ok(msg) => {
-                    if let Message::Text(text) = msg {
-                        if let Ok(notification) = serde_json::from_str::<crate::task::JsonRpcNotification>(&text) {
-                            let method = notification.method.as_str();
-                            
-                            // Log incoming message (skip metrics for brevity)
-                            if method != "metrics" {
-                                let _ = db_for_recv.save_task_log(Some(&worker_id_str), Some(&hostname_clone), "worker_to_master", method, &text).await;
-                            }
-
-                            match method {
-                                "get_wasm" => {
-                                    if let Ok(data) = serde_json::from_value::<serde_json::Value>(notification.params) {
-                                        let path = data["path"].as_str().unwrap_or_default().to_string();
-                                        let scheduler_for_wasm = scheduler_clone.clone();
-                                        let direct_tx_for_wasm = direct_tx_clone.clone();
-                                        let hostname_for_wasm = hostname_clone.clone();
-                                        
-                                        tokio::spawn(async move {
-                                            if let Some(binary) = scheduler_for_wasm.get_wasm_binary(&path).await {
-                                                println!("Streaming WASM file {} to worker {}", path, hostname_for_wasm);
-                                                
-                                                // Start streaming
-                                                let _ = direct_tx_for_wasm.send(crate::task::MasterMessage::WasmBegin {
-                                                    path: path.clone(),
-                                                    total_size: binary.len(),
-                                                });
-                                                
-                                                // Send chunks
-                                                let chunk_size = 512 * 1024; // 512KB chunks
-                                                for (i, chunk) in binary.chunks(chunk_size).enumerate() {
-                                                    let _ = direct_tx_for_wasm.send(crate::task::MasterMessage::WasmChunk {
-                                                        path: path.clone(),
-                                                        chunk: hex::encode(chunk),
-                                                        offset: i * chunk_size,
-                                                    });
-                                                    // Yield to allow other tasks to run
-                                                    tokio::task::yield_now().await;
-                                                    // Small delay to prevent saturating the network/CPU
-                                                    tokio::time::sleep(tokio::time::Duration::from_millis(10)).await;
-                                                }
-                                                
-                                                // End streaming
-                                                let _ = direct_tx_for_wasm.send(crate::task::MasterMessage::WasmEnd {
-                                                    path,
-                                                });
-                                            }
-                                        });
-                                    }
-                                },
-                                "metrics" => {
-                                    if let Ok(metrics) = serde_json::from_value::<crate::task::SystemMetrics>(notification.params) {
-                                        scheduler_clone.update_worker_metrics(worker_id, metrics).await;
-                                    }
-                                },
-                                "log" => {
-                                    if let Ok(log_msg) = serde_json::from_value::<crate::task::LogMessage>(notification.params) {
-                                        let db = scheduler_clone.get_db();
-                                        if let (Some(log_id), Some(prefix)) = (log_msg.log_id, &log_msg.prefix) {
-                                            let _ = db.save_log_line(log_id, prefix, log_msg.hostname.as_deref(), &log_msg.text).await;
-                                            scheduler_clone.send_log(log_msg);
-                                        }
-                                    }
-                                },
-                                "task_started" => {
-                                    if let Ok(data) = serde_json::from_value::<serde_json::Value>(notification.params.clone()) {
-                                        let task_id = data["task_id"].as_str().and_then(|s| Uuid::parse_str(s).ok());
-                                        let task_name = data["task_name"].as_str().unwrap_or_default().to_string();
-                                        if let Some(tid) = task_id {
-                                            scheduler_clone.update_worker_task(worker_id, tid, task_name, true).await;
-                                            scheduler_clone.broadcast_status().await;
-                                        }
-                                    }
-                                },
-                                "task_result" => {
-                                    let params_clone = notification.params.clone();
-                                    if let Ok(data) = serde_json::from_value::<serde_json::Value>(notification.params) {
-                                        let task_id = data["task_id"].as_str().and_then(|s| Uuid::parse_str(s).ok());
-                                        if let Some(tid) = task_id {
-                                            scheduler_clone.update_worker_task(worker_id, tid, "".to_string(), false).await;
-                                            scheduler_clone.broadcast_status().await;
-                                        }
-                                    }
-                                    println!("Received task result from worker {}: {}", hostname_clone, params_clone);
-                                },
-                                _ => eprintln!("Unknown RPC method from worker {}: {}", hostname_clone, notification.method),
-                            }
-                        }
-                    }
-                },
-                Err(e) => {
-                    eprintln!("WebSocket error from worker {}: {}", hostname_clone, e);
-                    break;
-                }
-            }
-        }
-    });
-
-    // Wait for either task to finish (connection closed)
-    tokio::select! {
-        _ = (&mut send_task) => recv_task.abort(),
-        _ = (&mut recv_task) => send_task.abort(),
-    };
+    // Run the RPC server for this worker connection
+    server::BaseChannel::with_defaults(master_transport)
+        .execute(master_server.serve())
+        .for_each(|f| async move { f.await })
+        .await;
 
     println!("Worker disconnected: {}. Active workers: {}", hostname, scheduler.num_workers() - 1);
 }
@@ -785,7 +650,7 @@ pub async fn get_tasks_handler(
 
 pub async fn toggle_task_handler(
     State(scheduler): State<Arc<Scheduler>>,
-    Path(task_id): Path<Uuid>,
+    Path(task_id): Path<i64>,
     Json(payload): Json<ToggleRequest>,
 ) -> impl IntoResponse {
     scheduler.set_task_enabled(task_id, payload.enabled).await;
@@ -794,7 +659,7 @@ pub async fn toggle_task_handler(
 
 pub async fn run_task_handler(
     State(scheduler): State<Arc<Scheduler>>,
-    Path(task_id): Path<Uuid>,
+    Path(task_id): Path<i64>,
 ) -> impl IntoResponse {
     match scheduler.run_task_immediately(task_id).await {
         Ok(_) => StatusCode::OK.into_response(),
@@ -866,4 +731,52 @@ pub async fn get_task_logs_handler(
         "page": page,
         "limit": limit
     })).into_response()
+}
+
+pub async fn task_rpc_handler(
+    State(scheduler): State<Arc<Scheduler>>,
+    Json(req): Json<serde_json::Value>,
+) -> impl IntoResponse {
+    let method = req["method"].as_str().unwrap_or_default();
+    let id = req["id"].clone();
+    let params = &req["params"];
+    
+    let task_id = params["task_id"].as_i64().unwrap_or(0);
+    let token = params["token"].as_str().unwrap_or_default();
+
+    // Verify token
+    if !scheduler.check_task_token(task_id, token).await {
+        return (StatusCode::UNAUTHORIZED, Json(serde_json::json!({
+            "jsonrpc": "2.0",
+            "error": { "code": -32000, "message": "Invalid or expired task token" },
+            "id": id
+        }))).into_response();
+    }
+
+    match method {
+        "kv_get" => {
+            let key = params["key"].as_str().unwrap_or_default();
+            let value = scheduler.get_db().get_app_kv(task_id, key).await.ok().flatten();
+            Json(serde_json::json!({
+                "jsonrpc": "2.0",
+                "result": value,
+                "id": id
+            })).into_response()
+        },
+        "kv_set" => {
+            let key = params["key"].as_str().unwrap_or_default();
+            let value = params["value"].as_str().unwrap_or_default();
+            let _ = scheduler.get_db().set_app_kv(task_id, key, value).await;
+            Json(serde_json::json!({
+                "jsonrpc": "2.0",
+                "result": "ok",
+                "id": id
+            })).into_response()
+        },
+        _ => (StatusCode::NOT_FOUND, Json(serde_json::json!({
+            "jsonrpc": "2.0",
+            "error": { "code": -32601, "message": "Method not found" },
+            "id": id
+        }))).into_response()
+    }
 }

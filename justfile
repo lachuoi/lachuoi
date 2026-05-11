@@ -6,6 +6,10 @@ build flags="":
     cargo build {{ flags }}
 
 # Run the master (lachuoi)
+run flags="":
+    just run-master {{ flags }}
+
+# Run the master (lachuoi)
 run-master flags="":
     cargo run --bin lachuoi {{ flags }}
 
@@ -22,8 +26,11 @@ reload:
     cargo run --bin lachuoi -- reload
 
 # Initialize the database (local development)
-db-init:
-    sqlite3 tasks.db < schema.sql
+db-init: migrate
+
+# Run database migrations
+migrate:
+    cargo run --bin lachuoi -- migrate
 
 # Run all checks (clippy, fmt, test)
 check-all: fmt lint test

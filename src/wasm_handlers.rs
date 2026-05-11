@@ -32,8 +32,52 @@ impl WasiHttpView for ComponentState {
 
 use crate::task::LogMessage;
 
+async fn handle_wasm_rpc(req: serde_json::Value, task_id: i64, rpc_client: Option<crate::rpc::MasterServiceClient>, db: Option<crate::db::Db>) -> Option<serde_json::Value> {
+    let method = req["method"].as_str()?;
+    let id = req["id"].clone();
+    let params = req["params"].clone();
+    let token = params["token"].as_str().unwrap_or_default().to_string();
+
+    match method {
+        "kv_get" => {
+            let key = params["key"].as_str()?.to_string();
+            let value = if let Some(client) = rpc_client {
+                client.kv_get(tarpc::context::current(), task_id, token, key).await.ok().flatten()
+            } else if let Some(db) = db {
+                db.get_app_kv(task_id, &key).await.ok().flatten()
+            } else {
+                None
+            };
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "result": value,
+                "id": id
+            }))
+        }
+        "kv_set" => {
+            let key = params["key"].as_str()?.to_string();
+            let value = params["value"].as_str()?.to_string();
+            if let Some(client) = rpc_client {
+                let _ = client.kv_set(tarpc::context::current(), task_id, token, key, value).await;
+            } else if let Some(db) = db {
+                let _ = db.set_app_kv(task_id, &key, &value).await;
+            }
+            Some(serde_json::json!({
+                "jsonrpc": "2.0",
+                "result": "ok",
+                "id": id
+            }))
+        }
+        _ => Some(serde_json::json!({
+            "jsonrpc": "2.0",
+            "error": { "code": -32601, "message": "Method not found" },
+            "id": id
+        }))
+    }
+}
+
 pub trait LogSink: Send + Sync {
-    fn log(&self, log_id: Uuid, task_id: Uuid, prefix: &str, line: &str);
+    fn log(&self, log_id: Uuid, task_id: i64, prefix: &str, line: &str);
 }
 
 pub struct DbLogSink {
@@ -43,7 +87,7 @@ pub struct DbLogSink {
 }
 
 impl LogSink for DbLogSink {
-    fn log(&self, log_id: Uuid, task_id: Uuid, prefix: &str, line: &str) {
+    fn log(&self, log_id: Uuid, task_id: i64, prefix: &str, line: &str) {
         let msg = format!("[{}] {}", prefix, line);
         println!("{}", msg);
         let _ = self.sender.send(LogMessage { 
@@ -67,9 +111,11 @@ impl LogSink for DbLogSink {
 pub struct PrefixPipe {
     pub prefix: String,
     pub log_id: Uuid,
-    pub task_id: Uuid,
+    pub task_id: i64,
     pub sink: Arc<dyn LogSink>,
     pub error_detected: Option<Arc<AtomicBool>>,
+    pub rpc_client: Option<crate::rpc::MasterServiceClient>,
+    pub db: Option<crate::db::Db>,
 }
 
 #[async_trait::async_trait]
@@ -81,6 +127,26 @@ impl wasmtime_wasi::HostOutputStream for PrefixPipe {
     fn write(&mut self, bytes: bytes::Bytes) -> Result<(), wasmtime_wasi::StreamError> {
         let text = String::from_utf8_lossy(&bytes);
         for line in text.lines() {
+            // Check if line is a JSON-RPC request
+            if line.trim().starts_with("{\"jsonrpc\"") {
+                if let Ok(req) = serde_json::from_str::<serde_json::Value>(line.trim()) {
+                    let log_id = self.log_id;
+                    let task_id = self.task_id;
+                    let sink = Arc::clone(&self.sink);
+                    let client = self.rpc_client.clone();
+                    let db = self.db.clone();
+                    
+                    // Route JSON-RPC request to host
+                    tokio::spawn(async move {
+                        if let Some(resp) = handle_wasm_rpc(req, task_id, client, db).await {
+                            let resp_json = serde_json::to_string(&resp).unwrap_or_default();
+                            sink.log(log_id, task_id, "rpc", &format!("Response: {}", resp_json));
+                        }
+                    });
+                    continue;
+                }
+            }
+
             self.sink.log(self.log_id, self.task_id, &self.prefix, line);
             
             // Error detection
@@ -111,6 +177,8 @@ impl wasmtime_wasi::StdoutStream for PrefixPipe {
             task_id: self.task_id,
             sink: Arc::clone(&self.sink),
             error_detected: self.error_detected.clone(),
+            rpc_client: self.rpc_client.clone(),
+            db: self.db.clone(),
         })
     }
 
@@ -125,16 +193,40 @@ pub async fn register_all(_scheduler: &Scheduler) {
     // similar to how native_handlers.rs works.
 }
 
-pub async fn run_wasm_binary(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, sink: Arc<dyn LogSink>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, task_id: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn run_wasm_binary(
+    engine: &Engine, 
+    binary: &[u8], 
+    wasm_path: &str, 
+    task_name: &str, 
+    sink: Arc<dyn LogSink>, 
+    args: Option<Vec<String>>, 
+    env: Option<HashMap<String, String>>, 
+    log_id: Uuid, 
+    task_id: i64,
+    rpc_client: Option<crate::rpc::MasterServiceClient>,
+    db: Option<crate::db::Db>
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     // Check if it's a WASM component (starts with \0asm and version 0x0d)
     if binary.starts_with(&[0, 0x61, 0x73, 0x6d, 0x0d, 0, 1, 0]) {
-        run_wasm_component(engine, binary, wasm_path, task_name, sink, args, env, log_id, task_id).await
+        run_wasm_component(engine, binary, wasm_path, task_name, sink, args, env, log_id, task_id, rpc_client, db).await
     } else {
-        run_wasm_module(engine, binary, wasm_path, task_name, sink, args, env, log_id, task_id).await
+        run_wasm_module(engine, binary, wasm_path, task_name, sink, args, env, log_id, task_id, rpc_client, db).await
     }
 }
 
-pub async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, sink: Arc<dyn LogSink>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, task_id: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn run_wasm_module(
+    engine: &Engine, 
+    binary: &[u8], 
+    wasm_path: &str, 
+    task_name: &str, 
+    sink: Arc<dyn LogSink>, 
+    args: Option<Vec<String>>, 
+    env: Option<HashMap<String, String>>, 
+    log_id: Uuid, 
+    task_id: i64,
+    rpc_client: Option<crate::rpc::MasterServiceClient>,
+    db: Option<crate::db::Db>
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let module = Module::from_binary(engine, binary)?;
 
     struct MyState {
@@ -153,6 +245,8 @@ pub async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, ta
             task_id,
             sink: Arc::clone(&sink),
             error_detected: Some(Arc::clone(&error_detected)),
+            rpc_client: rpc_client.clone(),
+            db: db.clone(),
         })
         .stderr(PrefixPipe {
             prefix: task_name.to_string(),
@@ -160,6 +254,8 @@ pub async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, ta
             task_id,
             sink: Arc::clone(&sink),
             error_detected: Some(Arc::clone(&error_detected)),
+            rpc_client,
+            db,
         });
 
     // Standard behavior: argv[0] is the program name
@@ -191,7 +287,19 @@ pub async fn run_wasm_module(engine: &Engine, binary: &[u8], wasm_path: &str, ta
     Ok(())
 }
 
-pub async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str, task_name: &str, sink: Arc<dyn LogSink>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, log_id: Uuid, task_id: Uuid) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+pub async fn run_wasm_component(
+    engine: &Engine, 
+    binary: &[u8], 
+    wasm_path: &str, 
+    task_name: &str, 
+    sink: Arc<dyn LogSink>, 
+    args: Option<Vec<String>>, 
+    env: Option<HashMap<String, String>>, 
+    log_id: Uuid, 
+    task_id: i64,
+    rpc_client: Option<crate::rpc::MasterServiceClient>,
+    db: Option<crate::db::Db>
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let component = Component::from_binary(engine, binary)?;
 
     let mut linker = ComponentLinker::new(engine);
@@ -207,6 +315,8 @@ pub async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str,
             task_id,
             sink: Arc::clone(&sink),
             error_detected: Some(Arc::clone(&error_detected)),
+            rpc_client: rpc_client.clone(),
+            db: db.clone(),
         })
         .stderr(PrefixPipe {
             prefix: task_name.to_string(),
@@ -214,6 +324,8 @@ pub async fn run_wasm_component(engine: &Engine, binary: &[u8], wasm_path: &str,
             task_id,
             sink: Arc::clone(&sink),
             error_detected: Some(Arc::clone(&error_detected)),
+            rpc_client,
+            db,
         })
         .inherit_network()
         .allow_ip_name_lookup(true);

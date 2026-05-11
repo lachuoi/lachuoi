@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 use wasmtime::*;
-use chrono_tz::Tz;
 use sha2::{Sha256, Digest};
 use std::io::BufReader;
 
@@ -21,11 +20,11 @@ use std::pin::Pin;
 use std::future::Future;
 
 // Type alias for task handlers - functions that execute when a task runs
-type TaskHandler = Arc<dyn Fn(Uuid, Uuid, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync>;
+type TaskHandler = Arc<dyn Fn(Uuid, i64, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync>;
 
 pub struct Scheduler {
-    tasks: Arc<RwLock<HashMap<Uuid, ScheduledTask>>>,
-    handlers: Arc<RwLock<HashMap<Uuid, TaskHandler>>>,
+    tasks: Arc<RwLock<HashMap<i64, ScheduledTask>>>,
+    handlers: Arc<RwLock<HashMap<i64, TaskHandler>>>,
     native_handlers: Arc<RwLock<HashMap<String, TaskHandler>>>,
     running: Arc<RwLock<bool>>,
     db: Db,
@@ -34,7 +33,6 @@ pub struct Scheduler {
     log_sender: tokio::sync::broadcast::Sender<LogMessage>,
     status_sender: tokio::sync::broadcast::Sender<Vec<crate::task::TaskStatus>>,
     webhook_sender: tokio::sync::broadcast::Sender<crate::db::WebhookLog>,
-    pub worker_tx: tokio::sync::broadcast::Sender<crate::task::MasterMessage>,
     worker_sender: tokio::sync::broadcast::Sender<Vec<crate::task::WorkerInfo>>,
     num_workers: Arc<std::sync::atomic::AtomicUsize>,
 
@@ -42,8 +40,9 @@ pub struct Scheduler {
     config_toml: Arc<RwLock<Option<String>>>,
     api_key: Option<String>,
     workers: Arc<RwLock<HashMap<Uuid, crate::task::WorkerInfo>>>,
-    worker_channels: Arc<RwLock<HashMap<Uuid, tokio::sync::mpsc::UnboundedSender<crate::task::MasterMessage>>>>,
-    task_to_worker: Arc<RwLock<HashMap<Uuid, String>>>,
+    worker_clients: Arc<RwLock<HashMap<Uuid, crate::rpc::WorkerServiceClient>>>,
+    task_to_worker: Arc<RwLock<HashMap<i64, String>>>,
+    active_tokens: Arc<RwLock<HashMap<i64, String>>>,
 }
 
 impl Scheduler {
@@ -55,10 +54,9 @@ impl Scheduler {
         let (log_sender, _) = tokio::sync::broadcast::channel(100);
         let (status_sender, _) = tokio::sync::broadcast::channel(100);
         let (webhook_sender, _) = tokio::sync::broadcast::channel(100);
-        let (worker_tx, _) = tokio::sync::broadcast::channel(100);
         let (worker_sender, _) = tokio::sync::broadcast::channel(100);
 
-        let api_key = std::env::var("LACHUOI_API_KEY").ok();
+        let api_key = std::env::var("NODE_KEY").ok();
 
         Self {
             tasks: Arc::new(RwLock::new(HashMap::new())),
@@ -71,16 +69,29 @@ impl Scheduler {
             log_sender,
             status_sender,
             webhook_sender,
-            worker_tx,
             worker_sender,
             num_workers: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             wasm_cache: Arc::new(RwLock::new(HashMap::new())),
             config_toml: Arc::new(RwLock::new(None)),
             api_key,
             workers: Arc::new(RwLock::new(HashMap::new())),
-            worker_channels: Arc::new(RwLock::new(HashMap::new())),
+            worker_clients: Arc::new(RwLock::new(HashMap::new())),
             task_to_worker: Arc::new(RwLock::new(HashMap::new())),
+            active_tokens: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+
+    pub async fn check_task_token(&self, task_id: i64, token: &str) -> bool {
+        let tokens = self.active_tokens.read().await;
+        tokens.get(&task_id).map(|t| t == token).unwrap_or(false)
+    }
+
+    pub async fn set_task_token(&self, task_id: i64, token: String) {
+        self.active_tokens.write().await.insert(task_id, token);
+    }
+
+    pub async fn clear_task_token(&self, task_id: i64) {
+        self.active_tokens.write().await.remove(&task_id);
     }
 
     pub fn verify_api_key(&self, key: &str) -> bool {
@@ -98,10 +109,10 @@ impl Scheduler {
         self.num_workers.store(n, std::sync::atomic::Ordering::SeqCst);
     }
 
-    pub async fn add_worker(&self, info: crate::task::WorkerInfo, tx: tokio::sync::mpsc::UnboundedSender<crate::task::MasterMessage>) {
+    pub async fn add_worker(&self, info: crate::task::WorkerInfo, client: crate::rpc::WorkerServiceClient) {
         let id = info.id;
         self.workers.write().await.insert(id, info);
-        self.worker_channels.write().await.insert(id, tx);
+        self.worker_clients.write().await.insert(id, client);
         self.num_workers.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.broadcast_workers().await;
     }
@@ -115,7 +126,7 @@ impl Scheduler {
         if let Some(host) = hostname {
             {
                 self.workers.write().await.remove(&id);
-                self.worker_channels.write().await.remove(&id);
+                self.worker_clients.write().await.remove(&id);
                 self.num_workers.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                 
                 // Clean up task mappings for this worker
@@ -128,16 +139,19 @@ impl Scheduler {
         }
     }
 
-    pub async fn send_to_random_worker(&self, msg: crate::task::MasterMessage) -> Result<(), String> {
-        let channels = self.worker_channels.read().await;
-        if channels.is_empty() {
+    pub async fn send_to_random_worker(&self, req: crate::task::RunRequest) -> Result<(), String> {
+        let clients = self.worker_clients.read().await;
+        if clients.is_empty() {
             return Err("No workers available".to_string());
         }
 
         use rand::seq::IteratorRandom;
         let mut rng = rand::rng();
-        if let Some((_, tx)) = channels.iter().choose(&mut rng) {
-            tx.send(msg).map_err(|e| format!("Failed to send to worker: {}", e))?;
+        if let Some((_, client)) = clients.iter().choose(&mut rng) {
+            let client = client.clone();
+            tokio::spawn(async move {
+                let _ = client.run_task(tarpc::context::current(), req).await;
+            });
             Ok(())
         } else {
             Err("Failed to select random worker".to_string())
@@ -161,7 +175,10 @@ impl Scheduler {
         }
     }
 
-    pub async fn update_worker_task(&self, worker_id: Uuid, task_id: Uuid, task_name: String, started: bool) {
+    pub async fn update_worker_task(&self, worker_id: Uuid, task_id: i64, task_name: String, started: bool) {
+        if !started {
+            self.clear_task_token(task_id).await;
+        }
         let mut changed = false;
         {
             let mut workers = self.workers.write().await;
@@ -250,23 +267,15 @@ impl Scheduler {
         let _ = self.webhook_sender.send(webhook);
     }
 
-    pub fn subscribe_worker_messages(&self) -> tokio::sync::broadcast::Receiver<crate::task::MasterMessage> {
-        self.worker_tx.subscribe()
-    }
-
-    pub fn send_worker_message(&self, msg: crate::task::MasterMessage) {
-        let _ = self.worker_tx.send(msg);
-    }
-
     pub fn send_log(&self, msg: LogMessage) {
         let _ = self.log_sender.send(msg);
     }
 
-    pub async fn get_bootstrap_info(&self) -> crate::task::MasterMessage {
-        crate::task::MasterMessage::Bootstrap(crate::task::BootstrapInfo {
-            config_toml: self.config_toml.read().await.clone().unwrap_or_default(),
-            wasm_paths: self.wasm_cache.read().await.keys().cloned().collect(),
-        })
+    pub async fn get_bootstrap_info_rpc(&self) -> (String, Vec<String>) {
+        (
+            self.config_toml.read().await.clone().unwrap_or_default(),
+            self.wasm_cache.read().await.keys().cloned().collect()
+        )
     }
 
     pub async fn get_wasm_binary(&self, path: &str) -> Option<Arc<Vec<u8>>> {
@@ -332,7 +341,7 @@ impl Scheduler {
             let tasks = self.tasks.read().await;
             tasks.values()
                 .map(|t| (t.name.clone(), t.id))
-                .collect::<HashMap<String, Uuid>>()
+                .collect::<HashMap<String, i64>>()
         };
 
         let mut config_names = std::collections::HashSet::new();
@@ -377,13 +386,12 @@ impl Scheduler {
                 continue;
             }
 
-            let task_id = existing_tasks.get(&task_cfg.name).cloned().unwrap_or_else(Uuid::new_v4);
+            let task_id = existing_tasks.get(&task_cfg.name).cloned().unwrap_or(0);
 
             match task_cfg.task_type.as_str() {
                 "native" => {
                     if native_handlers.contains_key(&task_cfg.name) {
                         let mut task = ScheduledTask::new(&task_cfg.name, &task_cfg.cron, &task_cfg.timezone)?;
-                        task.id = task_id;
                         
                         // Preserve state if updating
                         if let Some((last_run, last_dur, last_failed, enabled)) = existing_state {
@@ -393,8 +401,9 @@ impl Scheduler {
                             task.enabled = enabled;
                         }
 
-                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "native", None, None, None, None, task.enabled).await
+                        let task_id = self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "native", None, None, None, None, task.enabled).await
                             .map_err(|e| format!("Failed to save task: {}", e))?;
+                        task.id = task_id;
 
                         self.tasks.write().await.insert(task_id, task);
                         tasks_to_register.push((task_id, task_cfg.name.clone(), task_cfg.task_type.clone(), None, None, None, None));
@@ -406,8 +415,7 @@ impl Scheduler {
                 "wasm" => {
                     if let Some(payload) = &task_cfg.payload {
                         let mut task = ScheduledTask::new_wasm(&task_cfg.name, &task_cfg.cron, &task_cfg.timezone, payload, task_cfg.args.clone(), task_cfg.env.clone(), task_cfg.sha256.clone())?;
-                        task.id = task_id;
-
+                        
                         // Preserve state if updating
                         if let Some((last_run, last_dur, last_failed, enabled)) = existing_state {
                             task.last_run = last_run;
@@ -416,8 +424,9 @@ impl Scheduler {
                             task.enabled = enabled;
                         }
 
-                        self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "wasm", Some(payload), task_cfg.args.clone(), task_cfg.env.clone(), task_cfg.sha256.as_deref(), task.enabled).await
+                        let task_id = self.db.save_task(task_id, &task_cfg.name, &task_cfg.cron, &task_cfg.timezone, "wasm", Some(payload), task_cfg.args.clone(), task_cfg.env.clone(), task_cfg.sha256.as_deref(), task.enabled).await
                             .map_err(|e| format!("Failed to save task: {}", e))?;
+                        task.id = task_id;
 
                         self.tasks.write().await.insert(task_id, task);
                         tasks_to_register.push((task_id, task_cfg.name.clone(), task_cfg.task_type.clone(), Some(payload.clone()), task_cfg.args.clone(), task_cfg.env.clone(), task_cfg.sha256.clone()));
@@ -444,7 +453,7 @@ impl Scheduler {
         }
 
         // 3. Remove tasks that are in memory but NOT in config
-        let to_remove: Vec<Uuid> = existing_tasks
+        let to_remove: Vec<i64> = existing_tasks
             .iter()
             .filter(|(name, _)| !config_names.contains(*name))
             .map(|(_, id)| *id)
@@ -460,52 +469,80 @@ impl Scheduler {
     }
 
     pub async fn sync_db_only(&self, config: &crate::config::AppConfig) -> Result<(), String> {
+        println!("  -> Fetching current tasks from database...");
         let db_tasks = self.db.get_tasks().await
             .map_err(|e| format!("Failed to get tasks from DB: {}", e))?;
+        println!("  -> Found {} tasks in database.", db_tasks.len());
         
-        let mut existing_info = HashMap::new();
-        for (id, name, _, _, _, _, _, _, _, enabled) in db_tasks {
-            existing_info.insert(name, (id, enabled));
+        let mut db_task_map = HashMap::new();
+        for (id, name, cron, tz, t_type, payload, args, env, sha256, enabled) in db_tasks {
+            db_task_map.insert(name.clone(), (id, cron, tz, t_type, payload, args, env, sha256, enabled));
         }
 
         let mut config_names = std::collections::HashSet::new();
 
+        println!("  -> Syncing {} tasks from cron.toml...", config.tasks.len());
         for task_cfg in &config.tasks {
             config_names.insert(task_cfg.name.clone());
-            let (task_id, enabled) = existing_info.get(&task_cfg.name)
-                .cloned()
-                .unwrap_or_else(|| (Uuid::new_v4(), true));
             
-            self.db.save_task(
-                task_id, 
-                &task_cfg.name, 
-                &task_cfg.cron, 
-                &task_cfg.timezone, 
-                &task_cfg.task_type, 
-                task_cfg.payload.as_deref(), 
-                task_cfg.args.clone(), 
-                task_cfg.env.clone(), 
-                task_cfg.sha256.as_deref(), 
-                enabled
-            ).await.map_err(|e| format!("Failed to save task to DB: {}", e))?;
+            let mut needs_save = true;
+            let mut task_id = 0;
+            let mut enabled = true;
+
+            if let Some((id, db_cron, db_tz, db_type, db_payload, db_args, db_env, db_sha256, db_enabled)) = db_task_map.get(&task_cfg.name) {
+                task_id = *id;
+                enabled = *db_enabled;
+                
+                // Compare with DB state
+                if db_cron == &task_cfg.cron && 
+                   db_tz == &task_cfg.timezone && 
+                   db_type == &task_cfg.task_type && 
+                   db_payload.as_deref() == task_cfg.payload.as_deref() && 
+                   db_args.as_ref() == task_cfg.args.as_ref() && 
+                   db_env.as_ref() == task_cfg.env.as_ref() && 
+                   db_sha256.as_deref() == task_cfg.sha256.as_deref() {
+                    needs_save = false;
+                }
+            }
+
+            if needs_save {
+                println!("  -> Updating task '{}' (ID: {})...", task_cfg.name, task_id);
+                self.db.save_task(
+                    task_id, 
+                    &task_cfg.name, 
+                    &task_cfg.cron, 
+                    &task_cfg.timezone, 
+                    &task_cfg.task_type, 
+                    task_cfg.payload.as_deref(), 
+                    task_cfg.args.clone(), 
+                    task_cfg.env.clone(), 
+                    task_cfg.sha256.as_deref(), 
+                    enabled
+                ).await.map_err(|e| format!("Failed to save task to DB: {}", e))?;
+            }
         }
 
+        println!("  -> Cleaning up orphaned tasks...");
         // Remove tasks from DB not in config
-        for (name, (id, _)) in existing_info {
+        for (name, (id, _, _, _, _, _, _, _, _)) in db_task_map {
             if !config_names.contains(&name) {
+                println!("  -> Removing task '{}' (ID: {})...", name, id);
                 self.db.remove_task(id).await.map_err(|e| format!("Failed to remove task from DB: {}", e))?;
             }
         }
 
+        println!("  -> Database sync complete.");
         Ok(())
     }
 
     // Load tasks from the database
-    pub async fn load_tasks(self: &Arc<Self>) -> Result<Vec<(Uuid, String, String)>, String> {
+    pub async fn load_tasks(self: &Arc<Self>) -> Result<Vec<(i64, String, String)>, String> {
+        println!("  -> Loading tasks from database...");
         let db_tasks = self.db.get_tasks().await
             .map_err(|e| format!("Failed to get tasks from DB: {}", e))?;
 
         // Fetch latest run info from logs
+        println!("  -> Fetching latest execution logs...");
         let latest_logs = self.db.get_latest_task_logs().await
             .unwrap_or_default();
 
@@ -552,20 +589,24 @@ impl Scheduler {
         for (id, name, task_type, payload, args, env, sha256) in tasks_to_register {
             if task_type == "wasm" {
                 if let Some(path) = payload {
-                    self.clone().register_wasm_handler(id, path, name, args, env, sha256).await?;
+                    if let Err(e) = self.clone().register_wasm_handler(id, path, name.clone(), args, env, sha256).await {
+                        println!("Warning: Failed to register WASM handler for task '{}': {}", name, e);
+                    }
                 }
             } else if task_type == "native" {
                 let native_handlers = self.native_handlers.read().await;
                 if let Some(handler) = native_handlers.get(&name) {
                     let handler = Arc::clone(handler);
-                    self.register_handler(id, move |log_id, task_id, db, log_sender| handler(log_id, task_id, db, log_sender)).await?;
+                    if let Err(e) = self.register_handler(id, move |log_id, task_id, db, log_sender| handler(log_id, task_id, db, log_sender)).await {
+                        println!("Warning: Failed to register native handler for task '{}': {}", name, e);
+                    }
                 }
             }
         }
 
         Ok(loaded)
     }
-    async fn register_wasm_handler(self: Arc<Self>, task_id: Uuid, wasm_path: String, task_name: String, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, expected_sha256: Option<String>) -> Result<(), String> {
+    async fn register_wasm_handler(self: Arc<Self>, task_id: i64, wasm_path: String, task_name: String, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, expected_sha256: Option<String>) -> Result<(), String> {
         let engine = self.wasm_engine.clone();
         
         let binary = if wasm_path.starts_with("https://") {
@@ -615,7 +656,7 @@ impl Scheduler {
         let self_arc = Arc::clone(&self);
         let sha256_clone = expected_sha256.clone();
 
-        let handler = move |log_id: Uuid, task_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<LogMessage>| {
+        let handler = move |log_id: Uuid, task_id: i64, db: Db, log_sender: tokio::sync::broadcast::Sender<LogMessage>| {
             let engine = engine.clone();
             let name = task_name.clone();
             let args = args.clone();
@@ -627,7 +668,35 @@ impl Scheduler {
 
             Box::pin(async move {
                 let resolved_args = wasm_handlers::resolve_args(args).await;
+                let task_token = Uuid::new_v4().to_string();
+                self_clone.set_task_token(task_id, task_token.clone()).await;
+
+                let mut resolved_env = env.unwrap_or_default();
+                resolved_env.insert("APP_ID".to_string(), task_id.to_string());
+                resolved_env.insert("LACHUOI_TOKEN".to_string(), task_token.clone());
                 
+                let rpc_endpoint = std::env::var("LACHUOI_PUBLIC_URL")
+                    .or_else(|_| std::env::var("GITHUB_REDIRECT_URL").map(|u| {
+                        let url = url::Url::parse(&u).unwrap();
+                        let scheme = url.scheme();
+                        let host = url.host_str().unwrap_or("localhost");
+                        let port = url.port();
+                        
+                        match port {
+                            Some(p) => format!("{}://{}:{}/api/rpc", scheme, host, p),
+                            None => format!("{}://{}/api/rpc", scheme, host),
+                        }
+                    }))
+                    .unwrap_or_else(|_| "http://localhost:9130/api/rpc".to_string());
+                
+                resolved_env.insert("RPC_ENDPOINT".to_string(), rpc_endpoint);
+                
+                // Propagate Master node's ENVIRONMENT to the WASM task
+                let master_env = std::env::var("ENVIRONMENT").unwrap_or_else(|_| "production".to_string());
+                resolved_env.insert("ENVIRONMENT".to_string(), master_env);
+                
+                let env_opt = Some(resolved_env);
+
                 if self_clone.num_workers() > 0 {
                     println!("[{}] Delegating WASM task to a random worker", name);
                     let req = crate::task::RunRequest {
@@ -635,12 +704,13 @@ impl Scheduler {
                         expected_sha256,
                         task_name: name,
                         args: resolved_args,
-                        env,
+                        env: env_opt,
                         log_id,
                         task_id,
+                        task_token,
                     };
-                    
-                    if let Err(e) = self_clone.send_to_random_worker(crate::task::MasterMessage::RunTask(req)).await {
+
+                    if let Err(e) = self_clone.send_to_random_worker(req).await {
                         let err_msg = format!("Failed to delegate task: {}", e);
                         eprintln!("{}", err_msg);
                         return Err(err_msg);
@@ -652,7 +722,7 @@ impl Scheduler {
                         sender: log_sender,
                         hostname: "master".to_string(),
                     });
-                    if let Err(e) = wasm_handlers::run_wasm_binary(&engine, &binary, &err_path, &name, sink, resolved_args, env, log_id, task_id).await {
+                    if let Err(e) = wasm_handlers::run_wasm_binary(&engine, &binary, &err_path, &name, sink, resolved_args, env_opt, log_id, task_id, None, Some(db.clone())).await {
                         let err_msg = format!("Error executing WASM task: {}", e);
                         eprintln!("{}", err_msg);
                         Err(err_msg)
@@ -660,7 +730,8 @@ impl Scheduler {
                         Ok(())
                     }
                 }
-            }) as Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
+            })
+ as Pin<Box<dyn Future<Output = Result<(), String>> + Send>>
         };
 
         self.handlers.write().await.insert(task_id, Arc::new(handler));
@@ -668,9 +739,9 @@ impl Scheduler {
     }
 
     // Register a handler for a specific task ID
-    pub async fn register_handler<F, Fut>(&self, task_id: Uuid, handler: F) -> Result<(), String>
+    pub async fn register_handler<F, Fut>(&self, task_id: i64, handler: F) -> Result<(), String>
     where
-        F: Fn(Uuid, Uuid, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Fut + Send + Sync + 'static,
+        F: Fn(Uuid, i64, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<(), String>> + Send + 'static,
     {
         let handler = Arc::new(handler);
@@ -693,16 +764,18 @@ impl Scheduler {
         cron_expr: &str,
         timezone: &str,
         handler: F,
-    ) -> Result<Uuid, String>
+    ) -> Result<i64, String>
     where
-        F: Fn(Uuid, Uuid, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Fut + Send + Sync + 'static,
+        F: Fn(Uuid, i64, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Fut + Send + Sync + 'static,
         Fut: Future<Output = Result<(), String>> + Send + 'static,
     {
         let task = ScheduledTask::new(name, cron_expr, timezone)?;
-        let task_id = task.id;
 
-        self.db.save_task(task_id, name, cron_expr, timezone, "native", None, None, None, None, true).await
+        let task_id = self.db.save_task(0, name, cron_expr, timezone, "native", None, None, None, None, true).await
             .map_err(|e| format!("Failed to save task to DB: {}", e))?;
+        
+        let mut task = task;
+        task.id = task_id;
 
         self.tasks.write().await.insert(task_id, task);
         self.register_handler(task_id, handler).await?;
@@ -722,12 +795,14 @@ impl Scheduler {
         args: Option<Vec<String>>,
         env: Option<HashMap<String, String>>,
         sha256: Option<String>,
-    ) -> Result<Uuid, String> {
+    ) -> Result<i64, String> {
         let task = ScheduledTask::new_wasm(name, cron_expr, timezone, wasm_path, args.clone(), env.clone(), sha256.clone())?;
-        let task_id = task.id;
 
-        self.db.save_task(task_id, name, cron_expr, timezone, "wasm", Some(wasm_path), args.clone(), env.clone(), sha256.as_deref(), true).await
+        let task_id = self.db.save_task(0, name, cron_expr, timezone, "wasm", Some(wasm_path), args.clone(), env.clone(), sha256.as_deref(), true).await
             .map_err(|e| format!("Failed to save task to DB: {}", e))?;
+        
+        let mut task = task;
+        task.id = task_id;
 
         self.tasks.write().await.insert(task_id, task);
         self.clone().register_wasm_handler(task_id, wasm_path.to_string(), name.to_string(), args, env, sha256).await?;
@@ -738,7 +813,7 @@ impl Scheduler {
     }
 
     // Remove a task from the scheduler
-    pub async fn remove_task(&self, task_id: Uuid) -> bool {
+    pub async fn remove_task(&self, task_id: i64) -> bool {
         let _ = self.db.remove_task(task_id).await;
         let task_removed = {
             let mut tasks = self.tasks.write().await;
@@ -753,7 +828,7 @@ impl Scheduler {
     }
 
     // Enable or disable a task without removing it
-    pub async fn set_task_enabled(&self, task_id: Uuid, enabled: bool) {
+    pub async fn set_task_enabled(&self, task_id: i64, enabled: bool) {
         let _ = self.db.update_task_enabled(task_id, enabled).await;
         {
             if let Some(task) = self.tasks.write().await.get_mut(&task_id) {
@@ -763,7 +838,8 @@ impl Scheduler {
         self.broadcast_status().await;
     }
 
-    pub async fn run_task_immediately(self: Arc<Self>, task_id: Uuid) -> Result<(), String> {
+    pub async fn run_task_immediately(self: Arc<Self>, task_id: i64) -> Result<(), String> {
+
         let (task_name, is_enabled) = {
             let tasks = self.tasks.read().await;
             let task = tasks.get(&task_id).ok_or_else(|| "Task not found".to_string())?;

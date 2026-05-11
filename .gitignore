@@ -7,3 +7,7 @@ final.log
 output.log
 out
 err
+*.db
+*.db-shm
+*.db-wal
+.scheduler.pid

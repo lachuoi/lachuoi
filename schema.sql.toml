@@ -1,8 +1,8 @@
--- Copyright 2026 Seungjin Kim
--- SPDX-License-Identifier: MIT OR Apache-2.0
+version = 2026051101
 
+sql = """
 -- User Authorization Table
-CREATE TABLE IF NOT EXISTS lachuoi_users (
+CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     github_login TEXT UNIQUE NOT NULL,
     github_avatar_url TEXT,
@@ -10,8 +10,8 @@ CREATE TABLE IF NOT EXISTS lachuoi_users (
 );
 
 -- Tasks Configuration Table
-CREATE TABLE IF NOT EXISTS lachuoi_tasks (
-    id TEXT PRIMARY KEY NOT NULL,
+CREATE TABLE IF NOT EXISTS tasks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
     cron_expr TEXT NOT NULL,
     timezone TEXT NOT NULL,
@@ -25,34 +25,34 @@ CREATE TABLE IF NOT EXISTS lachuoi_tasks (
 );
 
 -- Execution Logs Table
-CREATE TABLE IF NOT EXISTS lachuoi_logs (
-    id TEXT PRIMARY KEY NOT NULL,
-    task_id TEXT NOT NULL,
+CREATE TABLE IF NOT EXISTS logs (
+    id TEXT PRIMARY KEY NOT NULL, -- Log ID remains UUID
+    task_id INTEGER NOT NULL,
     run_at DATETIME NOT NULL,
     duration_ms INTEGER,
-    FOREIGN KEY(task_id) REFERENCES lachuoi_tasks(id) ON DELETE CASCADE
+    FOREIGN KEY(task_id) REFERENCES tasks(id) ON DELETE CASCADE
 );
 
 -- Task Output Logs Table
-CREATE TABLE IF NOT EXISTS lachuoi_outputs (
+CREATE TABLE IF NOT EXISTS outputs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     log_id TEXT NOT NULL,
     module TEXT NOT NULL,
     host TEXT,
     output TEXT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY(log_id) REFERENCES lachuoi_logs(id) ON DELETE CASCADE
+    FOREIGN KEY(log_id) REFERENCES logs(id) ON DELETE CASCADE
 );
 
 -- Web Session Table
-CREATE TABLE IF NOT EXISTS lachuoi_sessions (
+CREATE TABLE IF NOT EXISTS sessions (
     id TEXT PRIMARY KEY NOT NULL,
     record BLOB NOT NULL,
     expiry_date INTEGER NOT NULL
 );
 
 -- Webhook Logs Table
-CREATE TABLE IF NOT EXISTS lachuoi_webhooks (
+CREATE TABLE IF NOT EXISTS webhooks (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     path TEXT NOT NULL,
     method TEXT NOT NULL,
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS lachuoi_webhooks (
 );
 
 -- Task Execution Events (WebSocket JSON-RPC logs)
-CREATE TABLE IF NOT EXISTS lachuoi_task_logs (
+CREATE TABLE IF NOT EXISTS task_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     worker_id TEXT,
     worker_hostname TEXT,
@@ -74,16 +74,24 @@ CREATE TABLE IF NOT EXISTS lachuoi_task_logs (
 );
 
 -- Kv_store Table
-CREATE TABLE `lachuoi_kv_store` (
+CREATE TABLE IF NOT EXISTS `kv_store` (
 	`key` text PRIMARY KEY,
 	`value` text,
 	`created_at` numeric DEFAULT CURRENT_TIMESTAMP,
 	`updated_at` numeric DEFAULT CURRENT_TIMESTAMP
 );
 
--- Migrations (for existing databases)
--- Run these if you are upgrading from an older version
--- ALTER TABLE lachuoi_webhooks ADD COLUMN remote_addr TEXT;
--- ALTER TABLE lachuoi_outputs ADD COLUMN host TEXT;
+-- Task-specific KV Store Table
+CREATE TABLE IF NOT EXISTS `task_kv_store` (
+    `id` INTEGER PRIMARY KEY AUTOINCREMENT,
+	`app_id` INTEGER NOT NULL,
+	`key` text NOT NULL,
+	`value` text,
+	`created_at` numeric DEFAULT CURRENT_TIMESTAMP,
+	`updated_at` numeric DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY(`app_id`) REFERENCES tasks(id) ON DELETE CASCADE
+);
 
-
+-- Initialize schema version
+INSERT OR IGNORE INTO kv_store (key, value) VALUES ('db_schema_version', '2026051101');
+"""

@@ -15,11 +15,11 @@ A high-performance, distributed WASI runtime and task management engine built wi
 ## 🚀 Key Features
 
 - **Distributed Architecture**: Decouple task scheduling (Master) from task execution (Worker).
-- **WebSocket Communication**: Master and Workers communicate via persistent, real-time WebSocket connections protected by `X-API-Key`.
+- **WebSocket Communication**: Master and Workers communicate via persistent, real-time WebSocket connections protected by a secure **NODE_KEY**.
 - **Hybrid Execution**: Run native Rust tasks on the Master or delegate secure, sandboxed WASM components to specialized Workers.
 - **Web Services & Webhooks**: Integrated support for receiving and processing webhooks, enabling event-driven task execution.
 - **Universal WASI Runtime**: Full support for WASI Preview 1 and the modern Component Model (Preview 2).
-- **Security & Integrity**: Unified middleware for GitHub OAuth and API Key authentication. Mandatory SHA256 checksum verification on both Master and Worker nodes.
+- **Security & Integrity**: Unified middleware for GitHub OAuth and **NODE_KEY** authentication. Mandatory SHA256 checksum verification on both Master and Worker nodes.
 - **Cluster Monitoring**: Comprehensive event logging (JSON-RPC) and real-time status tracking via SSE.
 
 ### 🎨 Modern Dashboard & Theme Support
@@ -48,16 +48,20 @@ Create a `.env` file in the root directory:
 
 ```bash
 # Database Configuration
-TURSO_DATABASE_URL="libsql://your-db.turso.io" # Or local path: "tasks.db"
-TURSO_AUTH_TOKEN="your-secret-token"           # Only for remote Turso
+TURSO_DATABASE_URL="lachuoi.db"                  # Local path (Preferred)
+# TURSO_DATABASE_URL="libsql://your-db.turso.io" # Remote Turso
+# TURSO_AUTH_TOKEN="your-secret-token"           # Only for remote Turso
 
 # GitHub OAuth
 GITHUB_CLIENT_ID="your_client_id"
 GITHUB_CLIENT_SECRET="your_client_secret"
 GITHUB_REDIRECT_URL="https://your-domain.com/auth/github/callback"
 
+# Environment
+ENVIRONMENT="production"                        # development or production (default: production)
+
 # Security
-LACHUOI_API_KEY="a-very-strong-secret-key"
+NODE_KEY="a-very-strong-secret-key"
 ```
 
 ### 2. Task Configuration (`cron.toml`)
@@ -96,7 +100,7 @@ cargo run --release --bin lachuoi
 The worker connects to the master and executes WASM tasks.
 ```bash
 export LACHUOI_MASTER_WS_URL="wss://your-master-node.com/ws/worker"
-export LACHUOI_API_KEY="your-very-strong-secret-key"
+export NODE_KEY="your-very-strong-secret-key"
 cargo run --release --bin lachuoi-worker
 ```
 
@@ -104,6 +108,8 @@ cargo run --release --bin lachuoi-worker
 If you modify `cron.toml`, you can reload the configuration without restarting the master:
 ```bash
 ./target/release/lachuoi reload
+# or
+just reload
 ```
 
 ### Systemd User Services
@@ -144,7 +150,7 @@ La Chuoi uses a **Master/Worker** architecture for scalability and isolation:
 - **Real-time Metrics**: Workers stream resource usage (CPU, Memory, Disk) and task status back to the Master for live dashboard updates.
 
 ### Security & Authentication
-- **Unified Middleware**: All administrative and API endpoints are protected by a unified authentication layer. It supports either a valid GitHub OAuth session or a secure `X-API-Key` header.
+- **Unified Middleware**: All administrative and API endpoints are protected by a unified authentication layer. It supports either a valid GitHub OAuth session, a secure **NODE_KEY** header, or a specialized **LACHUOI_TOKEN** for tasks.
 - **WASM Integrity**: Before executing any WASM binary, the Worker verifies its SHA256 checksum against the expected value provided by the Master. If a mismatch is detected or the binary is missing, the Worker automatically re-downloads a fresh copy from the Master.
 
 ---
@@ -173,7 +179,7 @@ podman run -p 9130:9130 --env-file .env ghcr.io/your-username/lachuoi:latest
 
 **Worker Node:**
 ```bash
-podman run --env LACHUOI_MASTER_WS_URL="wss://your-master.com/ws/worker" --env LACHUOI_API_KEY="your-key" ghcr.io/your-username/lachuoi-worker:latest
+podman run --env LACHUOI_MASTER_WS_URL="wss://your-master.com/ws/worker" --env NODE_KEY="your-key" ghcr.io/your-username/lachuoi-worker:latest
 ```
 
 You can also build them locally using the provided `Containerfile.master` and `Containerfile.worker`.

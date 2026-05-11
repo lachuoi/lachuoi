@@ -33,10 +33,13 @@ impl WebServer {
     }
 
     pub async fn run(self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let env = std::env::var("ENVIRONMENT").unwrap_or_else(|_| "production".to_string());
+        let is_production = env == "production";
         let is_https = std::env::var("GITHUB_REDIRECT_URL").map(|u| u.starts_with("https")).unwrap_or(false);
+        
         let session_layer = SessionManagerLayer::new(self.db)
-            .with_secure(is_https)
-            .with_same_site(tower_sessions::cookie::SameSite::Lax)
+            .with_secure(is_https || is_production) // Force secure in production if https is intended
+            .with_same_site(if is_production { tower_sessions::cookie::SameSite::Strict } else { tower_sessions::cookie::SameSite::Lax })
             .with_expiry(Expiry::OnInactivity(tower_sessions::cookie::time::Duration::days(7)));
 
         let scheduler_clone = Arc::clone(&self.scheduler);
@@ -62,6 +65,7 @@ impl WebServer {
             .route("/auth/github", get(login::github_login))
             .route("/auth/github/callback", get(login::github_callback))
             .route("/logout", get(login::logout))
+            .route("/api/rpc", axum::routing::post(handlers::task_rpc_handler))
             .merge(api_routes)
             .route("/webhook", axum::routing::any(handlers::webhook_handler))
             .route("/webhook/*path", axum::routing::any(handlers::webhook_handler))
@@ -84,6 +88,12 @@ async fn auth_middleware(
     request: Request,
     next: Next,
 ) -> Response {
+    // 0. Always allow RPC endpoint (it has its own token auth)
+    let path = request.uri().path();
+    if path == "/api/rpc" {
+        return next.run(request).await;
+    }
+
     // 1. Check Session
     if session.get::<i64>(USER_SESSION_KEY).await.unwrap().is_some() {
         return next.run(request).await;

@@ -7,17 +7,14 @@ use std::pin::Pin;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use uuid::Uuid;
-
 use crate::task::ScheduledTask;
 // Type for async task handlers
 type AsyncTaskHandler =
     Arc<dyn Fn() -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
 
 pub struct AsyncScheduler {
-    tasks: Arc<RwLock<HashMap<Uuid, ScheduledTask>>>,
-    handlers: Arc<RwLock<HashMap<Uuid, AsyncTaskHandler>>>,
-    running: Arc<RwLock<bool>>,
+    tasks: Arc<RwLock<HashMap<i64, ScheduledTask>>>,
+    handlers: Arc<RwLock<HashMap<i64, AsyncTaskHandler>>>,
 }
 
 impl AsyncScheduler {
@@ -25,7 +22,6 @@ impl AsyncScheduler {
         Self {
             tasks: Arc::new(RwLock::new(HashMap::new())),
             handlers: Arc::new(RwLock::new(HashMap::new())),
-            running: Arc::new(RwLock::new(false)),
         }
     }
 
@@ -36,7 +32,7 @@ impl AsyncScheduler {
         cron_expr: &str,
         timezone: &str,
         handler: F,
-    ) -> Result<Uuid, String>
+    ) -> Result<i64, String>
     where
         F: Fn() -> Fut + Send + Sync + 'static,
         Fut: Future<Output = ()> + Send + 'static,
@@ -57,7 +53,8 @@ impl AsyncScheduler {
     }
 
     // Execute async handlers
-    async fn run_task(&self, task_id: Uuid) {
+    async fn run_task(&self, task_id: i64) {
+
         let handler = {
             let handlers = self.handlers.read().await;
             handlers.get(&task_id).cloned()

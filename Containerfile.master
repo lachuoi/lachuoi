@@ -27,7 +27,7 @@ COPY src ./src
 COPY web ./web
 COPY plugins ./plugins
 COPY cron.toml ./
-COPY schema.sql ./
+COPY schema.sql.toml ./
 
 # Build the real application
 # We touch the main source files to ensure cargo knows it needs to rebuild after the dummy run
@@ -52,11 +52,10 @@ COPY --from=builder /app/target/release/lachuoi-worker /app/lachuoi-worker
 COPY --from=builder /app/web /app/web
 COPY --from=builder /app/plugins /app/plugins
 COPY --from=builder /app/cron.toml /app/cron.toml
-COPY --from=builder /app/schema.sql /app/schema.sql
 
 # Create a directory for the database to allow volume mounting
 RUN mkdir /app/data
-ENV TURSO_DATABASE_URL="/app/data/tasks.db"
+ENV TURSO_DATABASE_URL="/app/data/lachuoi.db"
 
 # Expose the web server port
 EXPOSE 9130

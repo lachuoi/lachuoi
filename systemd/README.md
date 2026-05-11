@@ -24,7 +24,7 @@ This directory contains systemd user service files for running the La Chuoi Mast
     For example, for the worker, you might want to create a `.worker.env` with:
     ```bash
     LACHUOI_MASTER_WS_URL="ws://127.0.0.1:9130/ws/worker"
-    LACHUOI_API_KEY="your-secret-key"
+    NODE_KEY="your-secret-key"
     ```
 
 4.  **Reload systemd user daemon**:

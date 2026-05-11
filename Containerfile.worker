@@ -24,6 +24,7 @@ RUN mkdir -p src/bin && \
 
 # Copy actual source
 COPY src ./src
+COPY schema.sql.toml ./
 
 # Build the real worker binary
 RUN touch src/bin/worker.rs && cargo build --release --bin lachuoi-worker
@@ -46,7 +47,7 @@ COPY --from=builder /app/target/release/lachuoi-worker /app/lachuoi-worker
 
 # Default environment variables for worker
 ENV LACHUOI_MASTER_WS_URL="ws://localhost:9130/ws/worker"
-ENV LACHUOI_API_KEY=""
+ENV NODE_KEY=""
 
 # Run the worker
 CMD ["./lachuoi-worker"]

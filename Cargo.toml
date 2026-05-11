@@ -56,3 +56,6 @@ url = "2.5"
 hostname = "0.4"
 sysinfo = "0.33.1"
 hex = "0.4"
+tarpc = { version = "0.35", features = ["tokio1", "serde-transport"] }
+pin-project = "1.1"
+bincode = "1.3"

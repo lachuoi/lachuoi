@@ -1,7 +1,7 @@
 // Copyright 2026 Seungjin Kim
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-use chrono::{DateTime, Utc, Duration};
+use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use cron::Schedule;
 use std::collections::HashMap;
@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone)]
 pub struct TaskStatus {
-    pub id: Uuid,
+    pub id: i64,
     pub name: String,
     pub cron: String,
     pub timezone: String,
@@ -49,7 +49,7 @@ pub struct WorkerInfo {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct LogMessage {
-    pub task_id: Uuid,
+    pub task_id: i64,
     pub log_id: Option<Uuid>,
     pub prefix: Option<String>,
     pub hostname: Option<String>,
@@ -64,37 +64,8 @@ pub struct RunRequest {
     pub args: Option<Vec<String>>,
     pub env: Option<HashMap<String, String>>,
     pub log_id: Uuid,
-    pub task_id: Uuid,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct JsonRpcRequest {
-    pub jsonrpc: String,
-    pub method: String,
-    pub params: serde_json::Value,
-    pub id: serde_json::Value,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct JsonRpcResponse {
-    pub jsonrpc: String,
-    pub result: Option<serde_json::Value>,
-    pub error: Option<JsonRpcError>,
-    pub id: serde_json::Value,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct JsonRpcNotification {
-    pub jsonrpc: String,
-    pub method: String,
-    pub params: serde_json::Value,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct JsonRpcError {
-    pub code: i32,
-    pub message: String,
-    pub data: Option<serde_json::Value>,
+    pub task_id: i64,
+    pub task_token: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
@@ -108,54 +79,9 @@ pub struct TaskLogEntry {
     pub created_at: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum MasterMessage {
-    Bootstrap(BootstrapInfo),
-    WasmBegin {
-        path: String,
-        total_size: usize,
-    },
-    WasmChunk {
-        path: String,
-        chunk: String, // Hex encoded chunk
-        offset: usize,
-    },
-    WasmEnd {
-        path: String,
-    },
-    RunTask(RunRequest),
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-pub struct BootstrapInfo {
-    pub config_toml: String,
-    pub wasm_paths: Vec<String>,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum WorkerMessage {
-    Log(LogMessage),
-    GetWasm {
-        path: String,
-    },
-    Metrics(SystemMetrics),
-    TaskStarted {
-        task_id: Uuid,
-        task_name: String,
-    },
-    TaskResult {
-        task_id: Uuid,
-        log_id: Uuid,
-        success: bool,
-        error: Option<String>,
-    },
-}
-
 // Represents a scheduled task with its cron schedule and execution logic
 pub struct ScheduledTask {
-    pub id: Uuid,
+    pub id: i64,
     pub name: String,
     pub cron_expr: String,
     pub timezone: Tz,
@@ -176,7 +102,7 @@ impl ScheduledTask {
     pub fn new(name: &str, cron_expr: &str, timezone: &str) -> Result<Self, String> {
         let tz = timezone.parse::<Tz>().map_err(|e| format!("Invalid timezone {}: {}", timezone, e))?;
         Ok(Self {
-            id: Uuid::new_v4(),
+            id: 0,
             name: name.to_string(),
             cron_expr: cron_expr.to_string(),
             timezone: tz,
@@ -185,7 +111,7 @@ impl ScheduledTask {
             args: None,
             env: None,
             sha256: None,
-            last_run: None,
+            last_run: Some(Utc::now()),
             last_duration: None,
             last_failed: false,
             enabled: true,
@@ -197,7 +123,7 @@ impl ScheduledTask {
     pub fn new_wasm(name: &str, cron_expr: &str, timezone: &str, wasm_path: &str, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, sha256: Option<String>) -> Result<Self, String> {
         let tz = timezone.parse::<Tz>().map_err(|e| format!("Invalid timezone {}: {}", timezone, e))?;
         Ok(Self {
-            id: Uuid::new_v4(),
+            id: 0,
             name: name.to_string(),
             cron_expr: cron_expr.to_string(),
             timezone: tz,
@@ -206,7 +132,7 @@ impl ScheduledTask {
             args,
             env,
             sha256,
-            last_run: None,
+            last_run: Some(Utc::now()),
             last_duration: None,
             last_failed: false,
             enabled: true,
@@ -215,7 +141,7 @@ impl ScheduledTask {
         })
     }
 
-    pub fn from_db(id: Uuid, name: String, cron_expr: String, timezone: String, task_type: String, payload: Option<String>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, sha256: Option<String>, enabled: bool) -> Result<Self, String> {
+    pub fn from_db(id: i64, name: String, cron_expr: String, timezone: String, task_type: String, payload: Option<String>, args: Option<Vec<String>>, env: Option<HashMap<String, String>>, sha256: Option<String>, enabled: bool) -> Result<Self, String> {
         let tz = timezone.parse::<Tz>().map_err(|e| format!("Invalid timezone {}: {}", timezone, e))?;
         Ok(Self {
             id,
@@ -227,7 +153,7 @@ impl ScheduledTask {
             args,
             env,
             sha256,
-            last_run: None,
+            last_run: Some(Utc::now()),
             last_duration: None,
             last_failed: false,
             enabled,

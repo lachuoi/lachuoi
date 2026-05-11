@@ -24,7 +24,7 @@ pub async fn register_all(scheduler: &Scheduler) {
 }
 
 /// Heartbeat handler with incrementing counter
-fn heartbeat_handler(counter: Arc<AtomicU32>) -> Arc<dyn Fn(Uuid, Uuid, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync> {
+fn heartbeat_handler(counter: Arc<AtomicU32>) -> Arc<dyn Fn(Uuid, i64, Db, tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> + Send + Sync> {
     Arc::new(move |log_id, task_id, db, log_sender| {
         let counter = Arc::clone(&counter);
         Box::pin(async move {
@@ -46,7 +46,8 @@ fn heartbeat_handler(counter: Arc<AtomicU32>) -> Arc<dyn Fn(Uuid, Uuid, Db, toki
 }
 
 /// Hourly report placeholder
-fn hourly_report_handler(log_id: Uuid, task_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> {
+fn hourly_report_handler(log_id: Uuid, task_id: i64, db: Db, log_sender: tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> {
+
     Box::pin(async move {
         let raw_msg = "Generating hourly report...";
         let msg = format!("[hourly-report] {}", raw_msg);
@@ -64,7 +65,8 @@ fn hourly_report_handler(log_id: Uuid, task_id: Uuid, db: Db, log_sender: tokio:
 }
 
 /// Cache cleanup placeholder
-fn cache_cleanup_handler(log_id: Uuid, task_id: Uuid, db: Db, log_sender: tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> {
+fn cache_cleanup_handler(log_id: Uuid, task_id: i64, db: Db, log_sender: tokio::sync::broadcast::Sender<LogMessage>) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send>> {
+
     Box::pin(async move {
         let raw_msg = "Cleaning up cache...";
         let msg = format!("[cache-cleanup] {}", raw_msg);

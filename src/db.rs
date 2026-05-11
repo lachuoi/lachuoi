@@ -7,6 +7,21 @@ use uuid::Uuid;
 use tower_sessions::{session::{Id, Record}, SessionStore};
 use async_trait::async_trait;
 use std::collections::HashMap;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct SchemaConfig {
+    version: i64,
+    sql: String,
+    #[serde(default)]
+    migrations: Vec<Migration>,
+}
+
+#[derive(Deserialize)]
+struct Migration {
+    version: i64,
+    sql: String,
+}
 
 #[derive(Clone)]
 pub struct Db {
@@ -33,8 +48,144 @@ impl Db {
         };
 
         let conn = db.connect()?;
+        
+        // Ensure WAL mode for concurrent access
+        if auth_token.is_none() {
+            // PRAGMA statements often return metadata rows, which cause execute() to fail in libsql.
+            // We use query() and ignore the results to safely apply these settings.
+            let _ = conn.query("PRAGMA journal_mode = WAL", ()).await?;
+            let _ = conn.query("PRAGMA synchronous = NORMAL", ()).await?;
+            let _ = conn.query("PRAGMA busy_timeout = 5000", ()).await?;
+        }
 
-        Ok(Self { conn })
+        let db_instance = Self { conn };
+        db_instance.setup_schema().await?;
+
+        Ok(db_instance)
+    }
+
+    async fn setup_schema(&self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        use std::io::{self, Write};
+        let schema_toml = include_str!("../schema.sql.toml");
+        let config: SchemaConfig = toml::from_str(schema_toml)?;
+
+        println!("  -> Initializing database schema (v{})...", config.version);
+        io::stdout().flush().ok();
+
+        // 1. Determine current version
+        let mut current_version: i64 = 0;
+
+        // Try kv_store first
+        let has_kv_table = {
+            let mut rows = self.conn.query("SELECT name FROM sqlite_master WHERE type='table' AND name='kv_store'", ()).await?;
+            rows.next().await?.is_some()
+        };
+
+        if has_kv_table {
+            let mut rows = self.conn.query("SELECT value FROM kv_store WHERE key='db_schema_version'", ()).await?;
+            if let Some(row) = rows.next().await? {
+                let v: String = row.get(0)?;
+                current_version = v.parse().unwrap_or(0);
+            }
+        }
+
+        println!("  -> Current database version: {}", current_version);
+        io::stdout().flush().ok();
+
+        // 2. Fresh install or Upgrade check
+        if current_version == 0 {
+            println!("  -> Performing fresh database installation...");
+            io::stdout().flush().ok();
+            // Fresh install: Run the full schema
+            for statement in config.sql.split(';') {
+                let s = statement.trim();
+                if !s.is_empty() {
+                    self.conn.execute(s, ()).await?;
+                }
+            }
+            println!("  -> Database installation complete.");
+        } else if current_version < config.version {
+            println!("  -> Upgrading database from v{} to v{}...", current_version, config.version);
+            io::stdout().flush().ok();
+            
+            let mut applied_any = false;
+            for m in config.migrations {
+                if m.version > current_version {
+                    println!("    -> Applying migration v{}...", m.version);
+                    io::stdout().flush().ok();
+                    for statement in m.sql.split(';') {
+                        let s = statement.trim();
+                        if !s.is_empty() {
+                            self.conn.execute(s, ()).await?;
+                        }
+                    }
+                    
+                    // Update version in kv_store
+                    self.conn.execute(
+                        "INSERT OR REPLACE INTO kv_store (key, value) VALUES ('db_schema_version', ?)", 
+                        libsql::params![m.version.to_string()]
+                    ).await?;
+                    applied_any = true;
+                }
+            }
+
+            if !applied_any {
+                println!("  -> No specific migrations found, performing version-only update.");
+                self.conn.execute(
+                    "INSERT OR REPLACE INTO kv_store (key, value) VALUES ('db_schema_version', ?)", 
+                    libsql::params![config.version.to_string()]
+                ).await?;
+            }
+            println!("  -> Database upgrade complete.");
+        } else {
+            println!("  -> Database is up to date.");
+        }
+
+        // 3. Ensure ADMIN_USER is authorized
+        if let Ok(admin) = std::env::var("ADMIN_USER") {
+            if !admin.trim().is_empty() {
+                self.conn.execute(
+                    "INSERT OR IGNORE INTO users (github_login) VALUES (?)",
+                    libsql::params![admin.trim()]
+                ).await?;
+                println!("  -> Verified authorization for ADMIN_USER: {}", admin.trim());
+            }
+        }
+
+        io::stdout().flush().ok();
+
+        Ok(())
+    }
+
+    pub async fn get_app_kv(&self, app_id: i64, key: &str) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+        let mut rows = self.conn.query(
+            "SELECT value FROM task_kv_store WHERE app_id = ? AND key = ?",
+            libsql::params![app_id, key]
+        ).await?;
+
+        if let Some(row) = rows.next().await? {
+            let v: String = row.get(0)?;
+            Ok(Some(v))
+        } else {
+            Ok(None)
+        }
+    }
+
+    pub async fn set_app_kv(&self, app_id: i64, key: &str, value: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        // Try to update existing first
+        let affected = self.conn.execute(
+            "UPDATE task_kv_store SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE app_id = ? AND key = ?",
+            libsql::params![value, app_id, key]
+        ).await?;
+
+        if affected == 0 {
+            // Insert if not exists
+            self.conn.execute(
+                "INSERT INTO task_kv_store (app_id, key, value) VALUES (?, ?, ?)",
+                libsql::params![app_id, key, value]
+            ).await?;
+        }
+        Ok(())
     }
 
     pub async fn is_authorized(
@@ -44,7 +195,7 @@ impl Db {
         let mut rows = self
             .conn
             .query(
-                "SELECT COUNT(*) FROM lachuoi_users WHERE github_login = ?",
+                "SELECT COUNT(*) FROM users WHERE github_login = ?",
                 libsql::params![github_login],
             )
             .await?;
@@ -65,7 +216,7 @@ impl Db {
         output: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "INSERT INTO lachuoi_outputs (log_id, module, host, output) VALUES (?, ?, ?, ?)",
+            "INSERT INTO outputs (log_id, module, host, output) VALUES (?, ?, ?, ?)",
             libsql::params![
                 log_id.to_string(),
                 module.to_string(),
@@ -80,7 +231,7 @@ impl Db {
 
     pub async fn save_task(
         &self,
-        id: Uuid,
+        id: i64,
         name: &str,
         cron_expr: &str,
         timezone: &str,
@@ -90,44 +241,62 @@ impl Db {
         env: Option<HashMap<String, String>>,
         sha256: Option<&str>,
         enabled: bool,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<i64, Box<dyn std::error::Error + Send + Sync>> {
         let args_json = args.map(|a| serde_json::to_string(&a).unwrap());
         let env_json = env.map(|e| serde_json::to_string(&e).unwrap());
 
-        self.conn.execute(
-            "INSERT OR REPLACE INTO lachuoi_tasks (id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            libsql::params![
-                id.to_string(),
-                name.to_string(),
-                cron_expr.to_string(),
-                timezone.to_string(),
-                task_type.to_string(),
-                payload.map(|s| s.to_string()),
-                args_json,
-                env_json,
-                sha256.map(|s| s.to_string()),
-                if enabled { 1 } else { 0 }
-            ]
-        )
-        .await?;
-
-        Ok(())
+        if id == 0 {
+            // Insert new task
+            self.conn.execute(
+                "INSERT INTO tasks (name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                libsql::params![
+                    name.to_string(),
+                    cron_expr.to_string(),
+                    timezone.to_string(),
+                    task_type.to_string(),
+                    payload.map(|s| s.to_string()),
+                    args_json,
+                    env_json,
+                    sha256.map(|s| s.to_string()),
+                    if enabled { 1 } else { 0 }
+                ]
+            ).await?;
+            Ok(self.conn.last_insert_rowid())
+        } else {
+            // Update or replace existing task
+            self.conn.execute(
+                "INSERT OR REPLACE INTO tasks (id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                libsql::params![
+                    id,
+                    name.to_string(),
+                    cron_expr.to_string(),
+                    timezone.to_string(),
+                    task_type.to_string(),
+                    payload.map(|s| s.to_string()),
+                    args_json,
+                    env_json,
+                    sha256.map(|s| s.to_string()),
+                    if enabled { 1 } else { 0 }
+                ]
+            ).await?;
+            Ok(id)
+        }
     }
 
     pub async fn get_tasks(
         &self,
     ) -> Result<
-        Vec<(Uuid, String, String, String, String, Option<String>, Option<Vec<String>>, Option<HashMap<String, String>>, Option<String>, bool)>,
+        Vec<(i64, String, String, String, String, Option<String>, Option<Vec<String>>, Option<HashMap<String, String>>, Option<String>, bool)>,
         Box<dyn std::error::Error + Send + Sync>,
     > {
         let mut rows = self
             .conn
-            .query("SELECT id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled FROM lachuoi_tasks", ())
+            .query("SELECT id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled FROM tasks", ())
             .await?;
 
         let mut tasks = Vec::new();
         while let Some(row) = rows.next().await? {
-            let id_str: String = row.get(0)?;
+            let id: i64 = row.get(0)?;
             let name: String = row.get(1)?;
             let cron_expr: String = row.get(2)?;
             let timezone: String = row.get(3)?;
@@ -141,9 +310,7 @@ impl Db {
             let args = args_json.and_then(|j| serde_json::from_str(&j).ok());
             let env = env_json.and_then(|j| serde_json::from_str(&j).ok());
 
-            if let Ok(id) = Uuid::parse_str(&id_str) {
-                tasks.push((id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled_int != 0));
-            }
+            tasks.push((id, name, cron_expr, timezone, task_type, payload, args, env, sha256, enabled_int != 0));
         }
 
         Ok(tasks)
@@ -154,7 +321,7 @@ impl Db {
     ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self
             .conn
-            .query("SELECT COUNT(*) FROM lachuoi_tasks", ())
+            .query("SELECT COUNT(*) FROM tasks", ())
             .await?;
         if let Some(row) = rows.next().await? {
             let count: i64 = row.get(0)?;
@@ -166,13 +333,13 @@ impl Db {
 
     pub async fn update_task_enabled(
         &self,
-        id: Uuid,
+        id: i64,
         enabled: bool,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn
             .execute(
-                "UPDATE lachuoi_tasks SET enabled = ? WHERE id = ?",
-                libsql::params![if enabled { 1 } else { 0 }, id.to_string()],
+                "UPDATE tasks SET enabled = ? WHERE id = ?",
+                libsql::params![if enabled { 1 } else { 0 }, id],
             )
             .await?;
         Ok(())
@@ -180,26 +347,24 @@ impl Db {
 
     pub async fn remove_task(
         &self,
-        id: Uuid,
+        id: i64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let id_str = id.to_string();
-
         // 1. Delete outputs associated with logs of this task
         self.conn.execute(
-            "DELETE FROM lachuoi_outputs WHERE log_id IN (SELECT id FROM lachuoi_logs WHERE task_id = ?)",
-            libsql::params![id_str.clone()]
+            "DELETE FROM outputs WHERE log_id IN (SELECT id FROM logs WHERE task_id = ?)",
+            libsql::params![id]
         ).await?;
 
         // 2. Delete logs of this task
         self.conn.execute(
-            "DELETE FROM lachuoi_logs WHERE task_id = ?",
-            libsql::params![id_str.clone()]
+            "DELETE FROM logs WHERE task_id = ?",
+            libsql::params![id]
         ).await?;
 
         // 3. Delete the task itself
         self.conn.execute(
-            "DELETE FROM lachuoi_tasks WHERE id = ?",
-            libsql::params![id_str]
+            "DELETE FROM tasks WHERE id = ?",
+            libsql::params![id]
         ).await?;
 
         Ok(())
@@ -207,14 +372,14 @@ impl Db {
 
     pub async fn log_execution_start(
         &self,
-        task_id: Uuid,
+        task_id: i64,
     ) -> Result<Uuid, Box<dyn std::error::Error + Send + Sync>> {
         let log_id = Uuid::new_v4();
         self.conn.execute(
-            "INSERT INTO lachuoi_logs (id, task_id, run_at, duration_ms) VALUES (?, ?, ?, NULL)",
+            "INSERT INTO logs (id, task_id, run_at, duration_ms) VALUES (?, ?, ?, NULL)",
             libsql::params![
                 log_id.to_string(),
-                task_id.to_string(),
+                task_id,
                 Utc::now().to_rfc3339()
             ]
         )
@@ -229,7 +394,7 @@ impl Db {
         duration_ms: u64,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "UPDATE lachuoi_logs SET duration_ms = ? WHERE id = ?",
+            "UPDATE logs SET duration_ms = ? WHERE id = ?",
             libsql::params![
                 duration_ms as i64,
                 log_id.to_string()
@@ -246,20 +411,20 @@ impl Db {
 
     pub async fn get_latest_task_logs(
         &self,
-    ) -> Result<std::collections::HashMap<Uuid, (Uuid, String, Option<i64>)>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<std::collections::HashMap<i64, (Uuid, String, Option<i64>)>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT id, task_id, run_at, duration_ms FROM lachuoi_logs WHERE (task_id, run_at) IN (SELECT task_id, MAX(run_at) FROM lachuoi_logs WHERE duration_ms IS NOT NULL GROUP BY task_id)",
+            "SELECT id, task_id, run_at, duration_ms FROM logs WHERE (task_id, run_at) IN (SELECT task_id, MAX(run_at) FROM logs WHERE duration_ms IS NOT NULL GROUP BY task_id)",
             ()
         ).await?;
 
         let mut results = std::collections::HashMap::new();
         while let Some(row) = rows.next().await? {
             let id_str: String = row.get(0)?;
-            let task_id_str: String = row.get(1)?;
+            let task_id: i64 = row.get(1)?;
             let run_at: String = row.get(2)?;
             let duration_ms: Option<i64> = row.get(3)?;
 
-            if let (Ok(log_id), Ok(task_id)) = (Uuid::parse_str(&id_str), Uuid::parse_str(&task_id_str)) {
+            if let Ok(log_id) = Uuid::parse_str(&id_str) {
                 results.insert(task_id, (log_id, run_at, duration_ms));
             }
         }
@@ -269,16 +434,15 @@ impl Db {
     pub async fn get_logs_by_id(
         &self,
         log_id: Uuid,
-    ) -> Result<Vec<(Option<Uuid>, String, String)>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<(Option<i64>, String, String)>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT l.task_id, o.output, o.created_at FROM lachuoi_outputs o JOIN lachuoi_logs l ON o.log_id = l.id WHERE o.log_id = ? ORDER BY o.created_at ASC",
+            "SELECT l.task_id, o.output, o.created_at FROM outputs o JOIN logs l ON o.log_id = l.id WHERE o.log_id = ? ORDER BY o.created_at ASC",
             libsql::params![log_id.to_string()]
         ).await?;
 
         let mut results = Vec::new();
         while let Some(row) = rows.next().await? {
-            let task_id_str: String = row.get(0)?;
-            let task_id = Uuid::parse_str(&task_id_str).ok();
+            let task_id: Option<i64> = row.get(0).ok();
             results.push((task_id, row.get(1)?, row.get(2)?));
         }
         Ok(results)
@@ -287,16 +451,15 @@ impl Db {
     pub async fn get_initial_outputs(
         &self,
         limit: usize,
-    ) -> Result<Vec<(Option<Uuid>, String, Option<String>, String)>, Box<dyn std::error::Error + Send + Sync>> {
+    ) -> Result<Vec<(Option<i64>, String, Option<String>, String)>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT l.task_id, o.output, o.host, o.created_at FROM lachuoi_outputs o JOIN lachuoi_logs l ON o.log_id = l.id ORDER BY o.created_at DESC LIMIT ?",
+            "SELECT l.task_id, o.output, o.host, o.created_at FROM outputs o JOIN logs l ON o.log_id = l.id ORDER BY o.created_at DESC LIMIT ?",
             libsql::params![limit as i64]
         ).await?;
 
         let mut results = Vec::new();
         while let Some(row) = rows.next().await? {
-            let task_id_str: String = row.get(0)?;
-            let task_id = Uuid::parse_str(&task_id_str).ok();
+            let task_id: Option<i64> = row.get(0).ok();
             let output: String = row.get(1)?;
             let host: Option<String> = row.get(2)?;
             let created_at: String = row.get(3)?;
@@ -315,7 +478,7 @@ impl Db {
         body: &str,
     ) -> Result<WebhookLog, Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "INSERT INTO lachuoi_webhooks (path, method, remote_addr, headers, body) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO webhooks (path, method, remote_addr, headers, body) VALUES (?, ?, ?, ?, ?)",
             libsql::params![
                 path.to_string(),
                 method.to_string(),
@@ -346,7 +509,7 @@ impl Db {
 
     pub async fn get_webhooks_paginated(&self, limit: usize, offset: usize) -> Result<Vec<WebhookLog>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT id, path, method, remote_addr, headers, body, created_at FROM lachuoi_webhooks ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "SELECT id, path, method, remote_addr, headers, body, created_at FROM webhooks ORDER BY created_at DESC LIMIT ? OFFSET ?",
             libsql::params![limit as i64, offset as i64]
         ).await?;
 
@@ -367,7 +530,7 @@ impl Db {
 
     pub async fn get_webhooks_count(&self) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT COUNT(*) FROM lachuoi_webhooks",
+            "SELECT COUNT(*) FROM webhooks",
             ()
         ).await?;
 
@@ -381,7 +544,7 @@ impl Db {
 
     pub async fn delete_webhook(&self, id: i64) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "DELETE FROM lachuoi_webhooks WHERE id = ?",
+            "DELETE FROM webhooks WHERE id = ?",
             libsql::params![id]
         ).await?;
         Ok(())
@@ -396,7 +559,7 @@ impl Db {
         payload: &str,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         self.conn.execute(
-            "INSERT INTO lachuoi_task_logs (worker_id, worker_hostname, direction, method, payload) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO task_logs (worker_id, worker_hostname, direction, method, payload) VALUES (?, ?, ?, ?, ?)",
             libsql::params![
                 worker_id,
                 worker_hostname,
@@ -415,7 +578,7 @@ impl Db {
         offset: usize,
     ) -> Result<Vec<crate::task::TaskLogEntry>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT id, worker_id, worker_hostname, direction, method, payload, created_at FROM lachuoi_task_logs ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            "SELECT id, worker_id, worker_hostname, direction, method, payload, created_at FROM task_logs ORDER BY created_at DESC LIMIT ? OFFSET ?",
             libsql::params![limit as i64, offset as i64]
         ).await?;
 
@@ -436,7 +599,7 @@ impl Db {
 
     pub async fn get_task_logs_count(&self) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT COUNT(*) FROM lachuoi_task_logs",
+            "SELECT COUNT(*) FROM task_logs",
             ()
         ).await?;
 
@@ -450,7 +613,7 @@ impl Db {
 
     pub async fn get_run_logs(&self, log_id: Uuid) -> Result<Vec<(String, Option<String>, String)>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT module, host, output FROM lachuoi_outputs WHERE log_id = ? ORDER BY id ASC",
+            "SELECT module, host, output FROM outputs WHERE log_id = ? ORDER BY id ASC",
             libsql::params![log_id.to_string()]
         ).await?;
 
@@ -470,25 +633,19 @@ mod tests {
     async fn setup_db() -> Db {
         let db = Db::new(":memory:", None).await.unwrap();
         db.conn.execute("PRAGMA foreign_keys = ON;", ()).await.unwrap();
-        let schema = std::fs::read_to_string("schema.sql").unwrap();
-        for statement in schema.split(";") {
-            let statement = statement.trim();
-            if !statement.is_empty() {
-                db.conn.execute(statement, ()).await.unwrap();
-            }
-        }
         db
     }
+
 
     #[tokio::test]
     async fn test_remove_task_with_logs() {
         let db = setup_db().await;
-        let task_id = Uuid::new_v4();
+        let task_name = "test_task";
 
         // 1. Create a task
-        db.save_task(
-            task_id,
-            "test_task",
+        let task_id = db.save_task(
+            0,
+            task_name,
             "* * * * *",
             "UTC",
             "native",
@@ -504,7 +661,7 @@ mod tests {
         db.log_execution_finish(log_id, 100).await.unwrap();
 
         // 3. Create an output for the log
-        db.save_log_line(log_id, "test_module", "test_output").await.unwrap();
+        db.save_log_line(log_id, "test_module", None, "test_output").await.unwrap();
 
         // 4. Attempt to remove the task
         db.remove_task(task_id).await.expect("Failed to remove task with logs");
@@ -514,11 +671,11 @@ mod tests {
         assert!(tasks.iter().all(|(id, _, _, _, _, _, _, _, _, _)| *id != task_id));
 
         // 6. Verify logs and outputs are gone (indirectly, but good to check)
-        let mut rows = db.conn.query("SELECT COUNT(*) FROM lachuoi_logs WHERE task_id = ?", libsql::params![task_id.to_string()]).await.unwrap();
+        let mut rows = db.conn.query("SELECT COUNT(*) FROM logs WHERE task_id = ?", libsql::params![task_id]).await.unwrap();
         let count: i64 = rows.next().await.unwrap().unwrap().get(0).unwrap();
         assert_eq!(count, 0);
 
-        let mut rows = db.conn.query("SELECT COUNT(*) FROM lachuoi_outputs WHERE log_id = ?", libsql::params![log_id.to_string()]).await.unwrap();
+        let mut rows = db.conn.query("SELECT COUNT(*) FROM outputs WHERE log_id = ?", libsql::params![log_id.to_string()]).await.unwrap();
         let count: i64 = rows.next().await.unwrap().unwrap().get(0).unwrap();
         assert_eq!(count, 0);
     }
@@ -544,7 +701,7 @@ impl SessionStore for Db {
         let expiry = record.expiry_date.unix_timestamp();
 
         self.conn.execute(
-            "INSERT OR REPLACE INTO lachuoi_sessions (id, record, expiry_date) VALUES (?, ?, ?)",
+            "INSERT OR REPLACE INTO sessions (id, record, expiry_date) VALUES (?, ?, ?)",
             libsql::params![record.id.to_string(), record_data, expiry]
         ).await.map_err(|e| tower_sessions::session_store::Error::Backend(e.to_string()))?;
 
@@ -553,7 +710,7 @@ impl SessionStore for Db {
 
     async fn load(&self, id: &Id) -> tower_sessions::session_store::Result<Option<Record>> {
         let mut rows = self.conn.query(
-            "SELECT record FROM lachuoi_sessions WHERE id = ? AND expiry_date > ?",
+            "SELECT record FROM sessions WHERE id = ? AND expiry_date > ?",
             libsql::params![id.to_string(), Utc::now().timestamp()]
         ).await.map_err(|e| tower_sessions::session_store::Error::Backend(e.to_string()))?;
 
@@ -569,7 +726,7 @@ impl SessionStore for Db {
 
     async fn delete(&self, id: &Id) -> tower_sessions::session_store::Result<()> {
         self.conn.execute(
-            "DELETE FROM lachuoi_sessions WHERE id = ?",
+            "DELETE FROM sessions WHERE id = ?",
             libsql::params![id.to_string()]
         ).await.map_err(|e| tower_sessions::session_store::Error::Backend(e.to_string()))?;
 
