@@ -158,17 +158,17 @@ impl MasterService for MasterServer {
         self.scheduler.broadcast_status().await;
     }
 
-    async fn kv_get(self, _: tarpc::context::Context, task_id: i64, token: String, key: String) -> Option<String> {
+    async fn get_key(self, _: tarpc::context::Context, task_id: i64, token: String, key: String) -> Vec<String> {
         if self.scheduler.check_task_token(task_id, &token).await {
-            self.scheduler.get_db().get_app_kv(task_id, &key).await.ok().flatten()
+            self.scheduler.get_db().get_app_key_values(task_id, &key).await.unwrap_or_default()
         } else {
-            None
+            Vec::new()
         }
     }
 
-    async fn kv_set(self, _: tarpc::context::Context, task_id: i64, token: String, key: String, value: String) {
+    async fn set_key(self, _: tarpc::context::Context, task_id: i64, token: String, key: String, value: String) {
         if self.scheduler.check_task_token(task_id, &token).await {
-            let _ = self.scheduler.get_db().set_app_kv(task_id, &key, &value).await;
+            let _ = self.scheduler.get_db().add_app_key_value(task_id, &key, &value).await;
         }
     }
 }
@@ -754,19 +754,19 @@ pub async fn task_rpc_handler(
     }
 
     match method {
-        "kv_get" => {
+        "get_key" => {
             let key = params["key"].as_str().unwrap_or_default();
-            let value = scheduler.get_db().get_app_kv(task_id, key).await.ok().flatten();
+            let values = scheduler.get_db().get_app_key_values(task_id, key).await.unwrap_or_default();
             Json(serde_json::json!({
                 "jsonrpc": "2.0",
-                "result": value,
+                "result": values,
                 "id": id
             })).into_response()
         },
-        "kv_set" => {
+        "set_key" => {
             let key = params["key"].as_str().unwrap_or_default();
             let value = params["value"].as_str().unwrap_or_default();
-            let _ = scheduler.get_db().set_app_kv(task_id, key, value).await;
+            let _ = scheduler.get_db().add_app_key_value(task_id, key, value).await;
             Json(serde_json::json!({
                 "jsonrpc": "2.0",
                 "result": "ok",

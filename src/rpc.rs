@@ -27,11 +27,11 @@ pub trait MasterService {
     /// Worker signals the result of a task execution
     async fn task_result(task_id: i64, log_id: Uuid, success: bool, error: Option<String>);
 
-    /// Task (via Worker) gets a value from KV store
-    async fn kv_get(task_id: i64, token: String, key: String) -> Option<String>;
+    /// Task (via Worker) gets values from KV store. Returns a list of values.
+    async fn get_key(task_id: i64, token: String, key: String) -> Vec<String>;
 
-    /// Task (via Worker) sets a value in KV store
-    async fn kv_set(task_id: i64, token: String, key: String, value: String);
+    /// Task (via Worker) sets a value in KV store. Keys can be duplicated.
+    async fn set_key(task_id: i64, token: String, key: String, value: String);
 }
 
 #[tarpc::service]

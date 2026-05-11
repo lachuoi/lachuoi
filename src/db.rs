@@ -157,34 +157,25 @@ impl Db {
         Ok(())
     }
 
-    pub async fn get_app_kv(&self, app_id: i64, key: &str) -> Result<Option<String>, Box<dyn std::error::Error + Send + Sync>> {
+    pub async fn get_app_key_values(&self, app_id: i64, key: &str) -> Result<Vec<String>, Box<dyn std::error::Error + Send + Sync>> {
         let mut rows = self.conn.query(
-            "SELECT value FROM task_kv_store WHERE app_id = ? AND key = ?",
+            "SELECT value FROM task_kv_store WHERE app_id = ? AND key = ? ORDER BY created_at ASC",
             libsql::params![app_id, key]
         ).await?;
 
-        if let Some(row) = rows.next().await? {
+        let mut values = Vec::new();
+        while let Some(row) = rows.next().await? {
             let v: String = row.get(0)?;
-            Ok(Some(v))
-        } else {
-            Ok(None)
+            values.push(v);
         }
+        Ok(values)
     }
 
-    pub async fn set_app_kv(&self, app_id: i64, key: &str, value: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        // Try to update existing first
-        let affected = self.conn.execute(
-            "UPDATE task_kv_store SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE app_id = ? AND key = ?",
-            libsql::params![value, app_id, key]
+    pub async fn add_app_key_value(&self, app_id: i64, key: &str, value: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        self.conn.execute(
+            "INSERT INTO task_kv_store (app_id, key, value) VALUES (?, ?, ?)",
+            libsql::params![app_id, key, value]
         ).await?;
-
-        if affected == 0 {
-            // Insert if not exists
-            self.conn.execute(
-                "INSERT INTO task_kv_store (app_id, key, value) VALUES (?, ?, ?)",
-                libsql::params![app_id, key, value]
-            ).await?;
-        }
         Ok(())
     }
 

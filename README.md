@@ -15,11 +15,12 @@ A high-performance, distributed WASI runtime and task management engine built wi
 ## 🚀 Key Features
 
 - **Distributed Architecture**: Decouple task scheduling (Master) from task execution (Worker).
-- **WebSocket Communication**: Master and Workers communicate via persistent, real-time WebSocket connections protected by a secure **NODE_KEY**.
+- **WebSocket Communication**: Master and Workers communicate via persistent, bidirectional RPC using **tarpc over WebSockets**, secured by a **NODE_KEY**.
 - **Hybrid Execution**: Run native Rust tasks on the Master or delegate secure, sandboxed WASM components to specialized Workers.
+- **Task Interaction**: Integrated **Task JSON-RPC HTTP Gateway** allowing WASM modules to persist state and interact with the host.
 - **Web Services & Webhooks**: Integrated support for receiving and processing webhooks, enabling event-driven task execution.
 - **Universal WASI Runtime**: Full support for WASI Preview 1 and the modern Component Model (Preview 2).
-- **Security & Integrity**: Unified middleware for GitHub OAuth and **NODE_KEY** authentication. Mandatory SHA256 checksum verification on both Master and Worker nodes.
+- **Security & Integrity**: Unified middleware for GitHub OAuth, **NODE_KEY**, and ephemeral **LACHUOI_TOKEN** authentication. Mandatory SHA256 checksum verification on all nodes.
 - **Cluster Monitoring**: Comprehensive event logging (JSON-RPC) and real-time status tracking via SSE.
 
 ### 🎨 Modern Dashboard & Theme Support
@@ -145,13 +146,25 @@ Version synchronization is automated between `Cargo.toml`, Git tags, and Contain
 
 ### Master/Worker Model
 La Chuoi uses a **Master/Worker** architecture for scalability and isolation:
-- **Master**: Responsible for task scheduling, persistent state (SQLite), GitHub OAuth, and the Web Dashboard. It acts as a WebSocket server.
-- **Worker**: Lightweight instances that connect to the Master. They host the Wasmtime runtime and execute tasks on demand.
+- **Master**: Responsible for task scheduling, persistent state (SQLite), GitHub OAuth, and the Web Dashboard. It acts as a **tarpc server/client** over WebSockets and hosts the task RPC gateway.
+- **Worker**: Lightweight instances that connect to the Master. They host the Wasmtime runtime and execute tasks on demand, communicating via **tarpc**.
 - **Real-time Metrics**: Workers stream resource usage (CPU, Memory, Disk) and task status back to the Master for live dashboard updates.
 
 ### Security & Authentication
-- **Unified Middleware**: All administrative and API endpoints are protected by a unified authentication layer. It supports either a valid GitHub OAuth session, a secure **NODE_KEY** header, or a specialized **LACHUOI_TOKEN** for tasks.
-- **WASM Integrity**: Before executing any WASM binary, the Worker verifies its SHA256 checksum against the expected value provided by the Master. If a mismatch is detected or the binary is missing, the Worker automatically re-downloads a fresh copy from the Master.
+- **Unified Middleware**: All administrative and API endpoints are protected by a multi-tier authentication layer:
+  - **GitHub OAuth**: For user dashboard sessions.
+  - **NODE_KEY**: For secure service-to-service node communication.
+  - **LACHUOI_TOKEN**: For ephemeral, per-run task authentication via the RPC gateway.
+- **WASM Integrity**: Before executing any WASM binary, the Worker verifies its SHA256 checksum. If a mismatch is detected, the Worker automatically re-downloads a fresh copy from the Master.
+
+---
+
+## 📚 Documentation
+
+Detailed guides are available in the [doc/](doc/) directory:
+
+- [**System Design & Conventions**](doc/DESIGN.md): Deep dive into the architecture, tech stack, and coding standards.
+- [**WASM Developer Guide**](doc/WASM_DEVELOPER_GUIDE.md): Instructions and examples for building sandboxed tasks that interact with the host.
 
 ---
 

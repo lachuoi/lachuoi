@@ -39,28 +39,28 @@ async fn handle_wasm_rpc(req: serde_json::Value, task_id: i64, rpc_client: Optio
     let token = params["token"].as_str().unwrap_or_default().to_string();
 
     match method {
-        "kv_get" => {
+        "get_key" => {
             let key = params["key"].as_str()?.to_string();
-            let value = if let Some(client) = rpc_client {
-                client.kv_get(tarpc::context::current(), task_id, token, key).await.ok().flatten()
+            let values = if let Some(client) = rpc_client {
+                client.get_key(tarpc::context::current(), task_id, token, key).await.unwrap_or_default()
             } else if let Some(db) = db {
-                db.get_app_kv(task_id, &key).await.ok().flatten()
+                db.get_app_key_values(task_id, &key).await.unwrap_or_default()
             } else {
-                None
+                Vec::new()
             };
             Some(serde_json::json!({
                 "jsonrpc": "2.0",
-                "result": value,
+                "result": values,
                 "id": id
             }))
         }
-        "kv_set" => {
+        "set_key" => {
             let key = params["key"].as_str()?.to_string();
             let value = params["value"].as_str()?.to_string();
             if let Some(client) = rpc_client {
-                let _ = client.kv_set(tarpc::context::current(), task_id, token, key, value).await;
+                let _ = client.set_key(tarpc::context::current(), task_id, token, key, value).await;
             } else if let Some(db) = db {
-                let _ = db.set_app_kv(task_id, &key, &value).await;
+                let _ = db.add_app_key_value(task_id, &key, &value).await;
             }
             Some(serde_json::json!({
                 "jsonrpc": "2.0",

@@ -25,12 +25,14 @@ All requests must be POSTed as JSON and include the `token` and `task_id` in the
 
 ### KV Store Access
 
-#### 1. Set a Value (`kv_set`)
+Each task has access to a persistent Key-Value store. **Note**: Keys can be duplicated; if multiple values exist for a key, `get_key` will return them as a list.
+
+#### 1. Set a Value (`set_key`)
 
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "kv_set",
+  "method": "set_key",
   "params": {
     "token": "YOUR_LACHUOI_TOKEN",
     "task_id": YOUR_APP_ID,
@@ -41,12 +43,12 @@ All requests must be POSTed as JSON and include the `token` and `task_id` in the
 }
 ```
 
-#### 2. Get a Value (`kv_get`)
+#### 2. Get Values (`get_key`)
 
 ```json
 {
   "jsonrpc": "2.0",
-  "method": "kv_get",
+  "method": "get_key",
   "params": {
     "token": "YOUR_LACHUOI_TOKEN",
     "task_id": YOUR_APP_ID,
@@ -55,6 +57,9 @@ All requests must be POSTed as JSON and include the `token` and `task_id` in the
   "id": 2
 }
 ```
+
+The system will log the response back to your task's log stream in the format:
+`[rpc] Response: {"jsonrpc":"2.0","result":["2026-05-11T12:00:00Z"],"id":2}`
 
 ## 📦 Building your WASM
 
